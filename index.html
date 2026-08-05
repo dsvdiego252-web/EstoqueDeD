@@ -1,0 +1,1652 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>D&D Personalizações — Controle de Estoque</title>
+<meta name="description" content="Controle de estoque, entradas, vendas e custos da D&D Personalizações.">
+
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0f0f0f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="D&D Estoque">
+<link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="/icons/favicon-16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --card: #222222;
+    --border: #2e2e2e;
+    --accent: #e8c547;
+    --accent2: #4ecdc4;
+    --danger: #ff6b6b;
+    --success: #6bcb77;
+    --text: #f0f0f0;
+    --muted: #888;
+    --font-display: 'Bebas Neue', sans-serif;
+    --font-body: 'DM Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    min-height: 100vh;
+  }
+
+  /* HEADER */
+  header {
+    background: var(--surface);
+    border-bottom: 2px solid var(--accent);
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+  }
+  .logo {
+    font-family: var(--font-display);
+    font-size: 28px;
+    letter-spacing: 3px;
+    color: var(--accent);
+  }
+  .logo span { color: var(--text); }
+  .logo img { height: 40px; width: auto; display: block; }
+  #loading-overlay img { height: 88px; width: auto; }
+  .header-actions { display: flex; gap: 10px; align-items: center; }
+  .btn-backup.install { background: var(--accent2); color: #0f0f0f; border-color: var(--accent2); }
+  .btn-backup.install:hover { background: #6fdcd4; }
+  .btn-backup {
+    padding: 7px 16px;
+    border-radius: 6px;
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+  }
+  .btn-backup.save { background: var(--accent); color: #111; border-color: var(--accent); }
+  .btn-backup.save:hover { background: #f5d35a; }
+  .btn-backup.load { background: transparent; color: var(--text); }
+  .btn-backup.load:hover { border-color: var(--accent2); color: var(--accent2); }
+  .toast {
+    position: fixed; bottom: 28px; right: 28px;
+    background: var(--card); border: 1px solid var(--border);
+    border-left: 4px solid var(--success);
+    padding: 14px 20px; border-radius: 8px;
+    font-size: 14px; color: var(--text);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    opacity: 0; transform: translateY(10px);
+    transition: all 0.3s; pointer-events: none; z-index: 999;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.error { border-left-color: var(--danger); }
+  .header-date {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  /* CARDS TOPO */
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    padding: 24px 32px 0;
+  }
+  .scard {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 22px;
+    position: relative;
+    overflow: hidden;
+  }
+  .scard::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 4px;
+    height: 100%;
+  }
+  .scard.yellow::before { background: var(--accent); }
+  .scard.teal::before { background: var(--accent2); }
+  .scard.red::before { background: var(--danger); }
+  .scard.green::before { background: var(--success); }
+  .scard-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .scard-value {
+    font-family: var(--font-display);
+    font-size: 36px;
+    letter-spacing: 2px;
+    line-height: 1;
+  }
+  .scard.yellow .scard-value { color: var(--accent); }
+  .scard.teal .scard-value { color: var(--accent2); }
+  .scard.red .scard-value { color: var(--danger); }
+  .scard.green .scard-value { color: var(--success); }
+  .scard-sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  /* TABS */
+  .tabs-bar {
+    display: flex;
+    gap: 4px;
+    padding: 24px 32px 0;
+  }
+  .tab-btn {
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 10px 22px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active {
+    background: var(--surface);
+    color: var(--accent);
+    border-color: var(--accent);
+    border-bottom: 2px solid var(--surface);
+    position: relative;
+    z-index: 2;
+  }
+
+  /* CONTEÚDO */
+  .main {
+    margin: 0 32px 32px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0 10px 10px 10px;
+    padding: 28px;
+    border-top: 1px solid var(--border);
+  }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* FORMULÁRIOS */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+  }
+  .form-group input, .form-group select {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-group input:focus, .form-group select:focus {
+    border-color: var(--accent);
+  }
+  .form-group select option { background: var(--card); }
+
+  .btn {
+    padding: 11px 28px;
+    border: none;
+    border-radius: 6px;
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+  }
+  .btn-primary { background: var(--accent); color: #111; }
+  .btn-primary:hover { background: #f5d35a; transform: translateY(-1px); }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: #ff5252; }
+  .btn-sm { padding: 6px 14px; font-size: 12px; }
+
+  /* TABELAS */
+  .section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    color: var(--muted);
+    margin-bottom: 14px;
+    padding-top: 4px;
+  }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  thead tr { border-bottom: 2px solid var(--border); }
+  th {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+  tbody tr:hover { background: rgba(255,255,255,0.03); }
+  td { padding: 11px 14px; }
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .badge-entrada { background: rgba(107,203,119,0.15); color: var(--success); }
+  .badge-saida { background: rgba(255,107,107,0.15); color: var(--danger); }
+
+  /* ESTOQUE */
+  .estoque-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+  }
+  .ecard {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    position: relative;
+  }
+  .ecard-name {
+    font-family: var(--font-display);
+    font-size: 20px;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .ecard-model {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .ecard-sizes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .size-pill {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 52px;
+  }
+  .size-pill .sz { font-size: 10px; color: var(--muted); letter-spacing: 1px; margin-bottom: 2px; }
+  .size-pill .qty {
+    font-family: var(--font-display);
+    font-size: 22px;
+    line-height: 1;
+  }
+  .size-pill.low .qty { color: var(--danger); }
+  .size-pill.ok .qty { color: var(--success); }
+  .size-pill.zero .qty { color: var(--muted); }
+
+  /* FILTROS */
+  .filter-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+  .filter-bar .form-group { flex: 1; min-width: 140px; }
+
+  /* RELATÓRIO */
+  .report-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .stat-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+  }
+  .stat-box .lbl { font-size: 11px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; }
+  .stat-box .val { font-family: var(--font-display); font-size: 30px; }
+
+  .empty {
+    text-align: center;
+    padding: 40px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .empty-icon { font-size: 40px; margin-bottom: 10px; }
+
+  .modal-backup {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .modal-backup.open { display: flex; }
+  .modal-backup-box {
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    padding: 22px;
+    width: min(540px, 100%);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .modal-backup-title {
+    font-family: var(--font-display);
+    font-size: 20px;
+    letter-spacing: 2px;
+    color: var(--accent);
+  }
+  .modal-backup-instrucoes {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .modal-backup-instrucoes strong { color: var(--text); }
+  .modal-backup-textarea {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: monospace;
+    font-size: 11px;
+    padding: 12px;
+    resize: none;
+    flex: 1;
+    min-height: 160px;
+    max-height: 260px;
+    outline: none;
+  }
+  .modal-backup-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  @media (max-width: 700px) {
+    .summary { grid-template-columns: repeat(2,1fr); }
+    header, .tabs-bar, .main { padding-left: 16px; padding-right: 16px; }
+    .main { margin-left: 16px; margin-right: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOADING OVERLAY -->
+<div id="loading-overlay" style="display:flex;position:fixed;inset:0;background:rgba(15,15,15,0.92);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
+  <img src="/icons/logo-header.png" alt="D&D Personalizações">
+  <div style="color:#e8c547;font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:3px;">CONECTANDO À NUVEM...</div>
+  <div style="width:48px;height:48px;border:4px solid #2e2e2e;border-top:4px solid #e8c547;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
+<header>
+  <div class="logo" style="display:flex;align-items:center;gap:12px;padding:6px 0;">
+  <img src="/icons/logo-header.png" alt="D&D Personalizações">
+    <span style="font-family:var(--font-display);font-size:20px;letter-spacing:2px;color:#b8972a;line-height:1.1;">D&D<br><span style="font-size:13px;letter-spacing:3px;color:#d4af37;">PERSONALIZAÇÕES</span></span>
+  </div>
+  <div class="header-actions">
+    <div class="header-date" id="hDate"></div>
+    <button class="btn-backup install" id="btn-instalar" style="display:none;">📲 Instalar</button>
+    <button class="btn-backup load" id="btn-importar">⬆ Carregar</button>
+    <button class="btn-backup save" id="btn-salvar-backup">💾 Backup</button>
+  </div>
+</header>
+<input type="file" id="input-importar" accept=".json" style="position:fixed;top:-999px;left:-999px;opacity:0;width:1px;height:1px;">
+<div class="toast" id="toast"></div>
+
+<!-- MODAL BACKUP -->
+<div class="modal-backup" id="modal-backup">
+  <div class="modal-backup-box">
+    <div class="modal-backup-title" id="modal-backup-title">💾 BACKUP</div>
+
+    <!-- MODO SALVAR -->
+    <div id="modo-salvar">
+      <div class="modal-backup-instrucoes">
+        Toque em <strong>📋 Copiar Tudo</strong> e cole no WhatsApp (pra você mesmo), Google Keep ou Notas.
+      </div>
+      <textarea class="modal-backup-textarea" id="backup-textarea" readonly placeholder="(o texto do backup aparece aqui)"></textarea>
+      <div class="modal-backup-actions">
+        <button class="btn btn-primary" id="btn-copiar-backup">📋 Copiar Tudo</button>
+        <button class="btn" style="background:var(--card);color:var(--text);border:1px solid var(--border);" id="btn-fechar-backup">Fechar</button>
+      </div>
+    </div>
+
+    <!-- MODO RESTAURAR -->
+    <div id="modo-restaurar" style="display:none;">
+      <div class="modal-backup-instrucoes">
+        Abra o lugar onde salvou o backup (WhatsApp, Keep, Notas...), <strong>copie todo o texto</strong> e cole aqui embaixo.
+      </div>
+      <textarea class="modal-backup-textarea" id="restaurar-textarea" placeholder="Cole o texto do backup aqui..." style="min-height:180px;"></textarea>
+      <div class="modal-backup-actions">
+        <button class="btn btn-primary" id="btn-confirmar-restaurar">✅ Restaurar Dados</button>
+        <button class="btn" style="background:var(--card);color:var(--text);border:1px solid var(--border);" id="btn-fechar-backup-2">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="summary">
+  <div class="scard yellow">
+    <div class="scard-label">Total em Estoque</div>
+    <div class="scard-value" id="sc-total">0</div>
+    <div class="scard-sub">peças disponíveis</div>
+  </div>
+  <div class="scard teal">
+    <div class="scard-label">Entradas (mês)</div>
+    <div class="scard-value" id="sc-entrada">0</div>
+    <div class="scard-sub">peças compradas</div>
+  </div>
+  <div class="scard red">
+    <div class="scard-label">Saídas (mês)</div>
+    <div class="scard-value" id="sc-saida">0</div>
+    <div class="scard-sub">peças vendidas</div>
+  </div>
+  <div class="scard green">
+    <div class="scard-label">Modelos Ativos</div>
+    <div class="scard-value" id="sc-modelos">0</div>
+    <div class="scard-sub">tipos de camisa</div>
+  </div>
+  <div class="scard yellow">
+    <div class="scard-label">Valor em Estoque</div>
+    <div class="scard-value" id="sc-valor-estoque" style="font-size:22px;">R$ 0,00</div>
+    <div class="scard-sub">custo total das peças</div>
+  </div>
+</div>
+
+<div class="tabs-bar">
+  <button class="tab-btn active" data-tab="estoque">📦 Estoque</button>
+  <button class="tab-btn" data-tab="entradas">⬆️ Entradas</button>
+  <button class="tab-btn" data-tab="saidas">⬇️ Vendas</button>
+  <button class="tab-btn" data-tab="custos">💰 Custos</button>
+  <button class="tab-btn" data-tab="relatorio">📊 Relatório</button>
+</div>
+
+<div class="main">
+
+  <!-- ABA ESTOQUE -->
+  <div class="tab-content active" id="tab-estoque">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div class="section-title">Posição Atual do Estoque</div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <input type="text" id="busca-estoque" placeholder="Buscar modelo..." style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;width:180px;">
+      </div>
+    </div>
+    <div class="estoque-grid" id="estoque-grid">
+      <div class="empty"><div class="empty-icon">👕</div>Nenhum produto ainda.<br>Registre uma entrada para começar.</div>
+    </div>
+  </div>
+
+  <!-- ABA ENTRADAS -->
+  <div class="tab-content" id="tab-entradas">
+    <div class="section-title">Registrar Entrada de Camisas</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Modelo / Produto</label>
+        <input type="text" id="ent-modelo" placeholder="Ex: Camiseta Básica" list="modelos-list">
+        <datalist id="modelos-list"></datalist>
+      </div>
+      <div class="form-group">
+        <label>Cor</label>
+        <input type="text" id="ent-cor" placeholder="Ex: Branco">
+      </div>
+      <div class="form-group">
+        <label>Tamanho</label>
+        <select id="ent-tamanho">
+          <option value="">Selecione</option>
+          <optgroup label="Adulto">
+            <option>PP</option><option>P</option><option>M</option>
+            <option>G</option><option>GG</option><option>XGG</option>
+            <option>Único</option>
+          </optgroup>
+          <optgroup label="Infantil">
+            <option>Inf. 2</option><option>Inf. 4</option><option>Inf. 6</option>
+            <option>Inf. 8</option><option>Inf. 10</option><option>Inf. 12</option>
+            <option>Inf. 14</option><option>Inf. 16</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Quantidade</label>
+        <input type="number" id="ent-qtd" placeholder="0" min="1">
+      </div>
+      <div class="form-group">
+        <label>Custo Unitário (R$)</label>
+        <input type="number" id="ent-custo" placeholder="0,00" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Fornecedor</label>
+        <input type="text" id="ent-fornecedor" placeholder="Ex: Atacado ABC" list="fornecedores-list">
+        <datalist id="fornecedores-list"></datalist>
+      </div>
+      <div class="form-group">
+        <label>Frete (R$)</label>
+        <input type="number" id="ent-frete" placeholder="0,00" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Data</label>
+        <input type="date" id="ent-data">
+      </div>
+      <div class="form-group">
+        <label>Observação</label>
+        <input type="text" id="ent-obs" placeholder="Opcional">
+      </div>
+    </div>
+    <button class="btn btn-primary" id="btn-add-entrada">+ Registrar Entrada</button>
+
+    <hr class="divider">
+    <div class="section-title">Histórico de Entradas</div>
+    <table id="tbl-entradas">
+      <thead><tr>
+        <th>Data</th><th>Modelo</th><th>Cor</th><th>Tamanho</th>
+        <th>Fornecedor</th><th>Qtd</th><th>Custo Unit.</th><th>Frete</th><th>Total</th><th>Obs.</th><th></th>
+      </tr></thead>
+      <tbody id="tbody-entradas">
+        <tr><td colspan="11" class="empty">Nenhuma entrada registrada.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ABA VENDAS -->
+  <div class="tab-content" id="tab-saidas">
+    <div class="section-title">Registrar Venda</div>
+    <div class="form-grid">
+
+      <div class="form-group">
+        <label>Filtrar por Fornecedor</label>
+        <select id="sai-filtro-fornecedor">
+          <option value="">Todos os fornecedores</option>
+        </select>
+      </div>
+
+      <div class="form-group" style="grid-column: span 2;">
+        <label>Peça em Estoque</label>
+        <select id="sai-peca">
+          <option value="">Selecione a peça disponível</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Estampa</label>
+        <input type="text" id="sai-estampa" placeholder="Ex: Floral, Logo, Lisa...">
+      </div>
+
+      <div class="form-group">
+        <label>Canal de Vendas</label>
+        <select id="sai-canal">
+          <option value="">Selecione</option>
+          <option>Shopee</option>
+          <option>Loja Física</option>
+          <option>WhatsApp</option>
+          <option>Instagram</option>
+          <option>Mercado Livre</option>
+          <option>Outro</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Quantidade</label>
+        <input type="number" id="sai-qtd" placeholder="0" min="1">
+      </div>
+
+      <div class="form-group">
+        <label>Preço Venda Unit. (R$)</label>
+        <input type="number" id="sai-preco" placeholder="0,00" step="0.01" min="0">
+      </div>
+
+      <div class="form-group">
+        <label>Desconto (R$)</label>
+        <input type="number" id="sai-desconto" placeholder="0,00" step="0.01" min="0">
+      </div>
+
+      <div class="form-group">
+        <label>Data</label>
+        <input type="date" id="sai-data">
+      </div>
+
+      <div class="form-group">
+        <label>Observação</label>
+        <input type="text" id="sai-obs" placeholder="Opcional">
+      </div>
+
+    </div>
+
+    <!-- PAINEL LUCRO LÍQUIDO -->
+    <div id="painel-lucro" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 22px;margin-bottom:20px;max-width:680px;">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);margin-bottom:12px;">Prévia do Lucro Líquido</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px;">
+        <div style="font-size:13px;color:var(--muted);">Receita líquida<br><span id="ll-receita" style="font-size:16px;color:var(--text);font-weight:600;"></span></div>
+        <div style="font-size:13px;color:var(--muted);">Custo camisa<br><span id="ll-custo-camisa" style="font-size:16px;color:var(--danger);font-weight:600;"></span></div>
+        <div style="font-size:13px;color:var(--muted);">Custos adicionais<br><span id="ll-custos-extras" style="font-size:16px;color:var(--danger);font-weight:600;"></span></div>
+        <div style="font-size:13px;color:var(--muted);" id="ll-taxa-label" style="display:none;">Taxa canal<br><span id="ll-taxa" style="font-size:16px;color:var(--danger);font-weight:600;"></span></div>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:12px;display:flex;align-items:center;gap:14px;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);">Lucro Líquido por Peça</div>
+        <div id="ll-valor" style="font-family:var(--font-display);font-size:32px;"></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:12px;align-items:center;">
+      <button class="btn btn-primary" id="btn-add-saida">+ Registrar Venda</button>
+      <span id="sai-disponivel" style="font-size:13px;color:var(--muted);"></span>
+    </div>
+
+    <hr class="divider">
+    <div class="section-title">Histórico de Vendas</div>
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Peça</th><th>Estampa</th><th>Canal</th>
+        <th>Qtd</th><th>Preço Unit.</th><th>Desconto</th><th>Total</th><th>Lucro Líq.</th><th>% L.Líq.</th><th>Obs.</th><th></th>
+      </tr></thead>
+      <tbody id="tbody-saidas">
+        <tr><td colspan="12" class="empty">Nenhuma venda registrada.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ABA CUSTOS -->
+  <div class="tab-content" id="tab-custos">
+    <div class="section-title">Configurar Custos Operacionais</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px;">Esses valores são usados para calcular o custo real por peça nos relatórios.</p>
+
+    <div class="form-grid" style="max-width:700px;">
+      <div class="form-group">
+        <label>Custo DTF (R$ por peça)</label>
+        <input type="number" id="cust-dtf" placeholder="0,00" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Custo Embalagem (R$ por peça)</label>
+        <input type="number" id="cust-embalagem" placeholder="0,00" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Outros Custos (R$ por peça)</label>
+        <input type="number" id="cust-outros" placeholder="0,00" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Descrição "Outros"</label>
+        <input type="text" id="cust-outros-desc" placeholder="Ex: Etiqueta, Linha...">
+      </div>
+    </div>
+    <button class="btn btn-primary" id="btn-salvar-custos">💾 Salvar Custos</button>
+
+    <hr class="divider">
+    <div class="section-title">Resumo de Custos por Peça</div>
+    <div class="stat-row" style="max-width:700px;">
+      <div class="stat-box">
+        <div class="lbl">DTF</div>
+        <div class="val" id="res-dtf" style="color:var(--accent2);font-size:24px">R$ 0,00</div>
+      </div>
+      <div class="stat-box">
+        <div class="lbl">Embalagem</div>
+        <div class="val" id="res-embalagem" style="color:var(--accent2);font-size:24px">R$ 0,00</div>
+      </div>
+      <div class="stat-box">
+        <div class="lbl" id="res-outros-lbl">Outros</div>
+        <div class="val" id="res-outros" style="color:var(--accent2);font-size:24px">R$ 0,00</div>
+      </div>
+    </div>
+    <div style="max-width:700px;background:var(--card);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:8px;padding:16px 20px;margin-top:4px;">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);margin-bottom:6px;">Custo Adicional Total por Peça</div>
+      <div style="font-family:var(--font-display);font-size:36px;color:var(--accent);" id="res-total">R$ 0,00</div>
+    </div>
+  </div>
+
+  <!-- ABA RELATÓRIO -->
+  <div class="tab-content" id="tab-relatorio">
+    <div class="report-header">
+      <div class="section-title" style="margin:0;">Relatório Geral</div>
+      <div style="display:flex;gap:10px;">
+        <select id="rel-filtro" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;">
+          <option value="tudo">Todo período</option>
+          <option value="mes">Este mês</option>
+          <option value="7dias">Últimos 7 dias</option>
+        </select>
+        <button class="btn btn-primary" id="btn-exportar">⬇ Exportar CSV</button>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="lbl">Total Comprado (R$)</div>
+        <div class="val" id="rel-comprado" style="color:var(--accent2)">R$ 0,00</div>
+      </div>
+      <div class="stat-box">
+        <div class="lbl">Total Vendido (R$)</div>
+        <div class="val" id="rel-vendido" style="color:var(--success)">R$ 0,00</div>
+      </div>
+      <div class="stat-box">
+        <div class="lbl">Lucro Bruto (R$)</div>
+        <div class="val" id="rel-lucro" style="color:var(--accent)">R$ 0,00</div>
+      </div>
+    </div>
+    <div class="stat-row" style="margin-top:-4px;">
+      <div class="stat-box" style="grid-column:span 2;">
+        <div class="lbl">Lucro Líquido Total (R$)</div>
+        <div class="val" id="rel-lucro-liq" style="color:var(--success)">R$ 0,00</div>
+      </div>
+      <div class="stat-box">
+        <div class="lbl">% Lucro Líquido</div>
+        <div class="val" id="rel-pct-liq" style="color:var(--accent)">0,0%</div>
+      </div>
+    </div>
+
+    <div class="section-title">Movimentações</div>
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Tipo</th><th>Modelo</th><th>Cor</th><th>Tam.</th><th>Qtd</th><th>Valor Unit.</th><th>Total</th>
+      </tr></thead>
+      <tbody id="tbody-relatorio">
+        <tr><td colspan="8" class="empty">Nenhuma movimentação.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- MODAL EDIÇÃO VENDA -->
+<div id="modal-edit" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:28px;width:min(560px,95vw);max-height:90vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div style="font-family:var(--font-display);font-size:22px;letter-spacing:2px;color:var(--accent);">EDITAR VENDA</div>
+      <button onclick="fecharModal()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;">✕</button>
+    </div>
+    <input type="hidden" id="edit-idx">
+    <div class="form-grid">
+      <div class="form-group" style="grid-column:span 2;">
+        <label>Peça</label>
+        <select id="edit-peca"></select>
+      </div>
+      <div class="form-group">
+        <label>Estampa</label>
+        <input type="text" id="edit-estampa" placeholder="Ex: Floral, Logo...">
+      </div>
+      <div class="form-group">
+        <label>Canal de Vendas</label>
+        <select id="edit-canal">
+          <option value="">Selecione</option>
+          <option>Shopee</option><option>Loja Física</option>
+          <option>WhatsApp</option><option>Instagram</option>
+          <option>Mercado Livre</option><option>Outro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Quantidade</label>
+        <input type="number" id="edit-qtd" min="1">
+      </div>
+      <div class="form-group">
+        <label>Preço Venda Unit. (R$)</label>
+        <input type="number" id="edit-preco" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Desconto (R$)</label>
+        <input type="number" id="edit-desconto" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Data</label>
+        <input type="date" id="edit-data">
+      </div>
+      <div class="form-group">
+        <label>Observação</label>
+        <input type="text" id="edit-obs">
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;margin-top:8px;">
+      <button class="btn btn-primary" id="btn-salvar-edit">💾 Salvar Alterações</button>
+      <button class="btn" style="background:var(--card);color:var(--text);border:1px solid var(--border);" onclick="fecharModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+
+// ── FIREBASE CONFIG ───────────────────────────────────────
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCkPvUZZtC0xNGes5k6PCX5wAqXkDRsdDs",
+  authDomain: "dd-personalizacoes.firebaseapp.com",
+  projectId: "dd-personalizacoes",
+  storageBucket: "dd-personalizacoes.firebasestorage.app",
+  messagingSenderId: "33969459844",
+  appId: "1:33969459844:web:dbcde76160e0bea2d1a8d1"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+const DOC_REF = doc(db, "estoque", "dados");
+
+// permite abrir o app e ver os últimos dados mesmo sem internet
+enableIndexedDbPersistence(db).catch(() => {});
+
+// ── PWA: SERVICE WORKER + INSTALAÇÃO ──────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  const btn = document.getElementById('btn-instalar');
+  if (btn) btn.style.display = '';
+});
+
+document.getElementById('btn-instalar').addEventListener('click', async () => {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  document.getElementById('btn-instalar').style.display = 'none';
+});
+
+window.addEventListener('appinstalled', () => {
+  document.getElementById('btn-instalar').style.display = 'none';
+  showToast('✅ App instalado! Já pode abrir da tela inicial.');
+});
+
+// ── ESTADO ──────────────────────────────────────────────
+let entradas = [];
+let saidas   = [];
+let custos   = {"dtf":0,"embalagem":0,"outros":0,"outrosDesc":""};
+let _carregado = false;
+
+// ── SALVAR NA NUVEM ───────────────────────────────────────
+async function salvar() {
+  try {
+    await setDoc(DOC_REF, { entradas, saidas, custos, atualizado: new Date().toISOString() });
+  } catch(e) {
+    console.error("Erro ao salvar:", e);
+    showToast("⚠️ Erro ao salvar na nuvem.", true);
+  }
+}
+
+// ── CARREGAR E ESCUTAR MUDANÇAS EM TEMPO REAL ─────────────
+function iniciarSync() {
+  document.getElementById('loading-overlay').style.display = 'flex';
+  onSnapshot(DOC_REF, (snap) => {
+    if (snap.exists()) {
+      const d = snap.data();
+      entradas = d.entradas || [];
+      saidas   = d.saidas   || [];
+      custos   = d.custos   || {"dtf":0,"embalagem":0,"outros":0,"outrosDesc":""};
+    }
+    if (!_carregado) {
+      _carregado = true;
+      document.getElementById('loading-overlay').style.display = 'none';
+      renderAll();
+      renderCustos();
+    } else {
+      renderAll();
+    }
+  }, (err) => {
+    console.error("Erro sync:", err);
+    document.getElementById('loading-overlay').style.display = 'none';
+    showToast("⚠️ Erro ao conectar com a nuvem.", true);
+    // fallback localStorage
+    entradas = JSON.parse(localStorage.getItem('est_entradas') || '[]');
+    saidas   = JSON.parse(localStorage.getItem('est_saidas')   || '[]');
+    custos   = JSON.parse(localStorage.getItem('est_custos')   || '{"dtf":0,"embalagem":0,"outros":0,"outrosDesc":""}');
+    renderAll();
+    renderCustos();
+  });
+}
+
+
+// (estado e salvar gerenciados pelo Firebase acima)
+
+// ── UTILS ────────────────────────────────────────────────
+function fmt(n) { return 'R$ ' + Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function hoje() { return new Date().toISOString().split('T')[0]; }
+function fmtData(d) { if(!d) return '—'; const [y,m,dd]=d.split('-'); return `${dd}/${m}/${y}`; }
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// custo médio ponderado por quantidade
+function custoMedioPonderado(modelo, cor, tamanho) {
+  const ents = entradas.filter(e=>e.modelo===modelo&&e.cor===cor&&e.tamanho===tamanho);
+  if(!ents.length) return 0;
+  const totalQtd  = ents.reduce((a,e)=>a+Number(e.qtd),0);
+  const totalCusto= ents.reduce((a,e)=>a+Number(e.custo)*Number(e.qtd),0);
+  return totalQtd > 0 ? totalCusto/totalQtd : 0;
+}
+
+// ── DATA INIT ────────────────────────────────────────────
+document.getElementById('hDate').textContent = new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+document.getElementById('ent-data').value = hoje();
+document.getElementById('sai-data').value = hoje();
+
+// ── ESTOQUE CALC ─────────────────────────────────────────
+function calcEstoque() {
+  const est = {};
+  entradas.forEach(e => {
+    const k = `${e.modelo}||${e.cor}||${e.tamanho}`;
+    est[k] = (est[k]||0) + Number(e.qtd);
+  });
+  saidas.forEach(s => {
+    const k = `${s.modelo}||${s.cor}||${s.tamanho}`;
+    est[k] = (est[k]||0) - Number(s.qtd);
+  });
+  return est;
+}
+
+function getEstoqueAgrupado() {
+  const est = calcEstoque();
+  const grupos = {};
+  Object.entries(est).forEach(([k,v]) => {
+    const [modelo,cor,tamanho] = k.split('||');
+    const gk = `${modelo}||${cor}`;
+    if(!grupos[gk]) grupos[gk] = {modelo,cor,tamanhos:{}};
+    grupos[gk].tamanhos[tamanho] = v;
+  });
+  return grupos;
+}
+
+function totalEstoque() {
+  const est = calcEstoque();
+  return Object.values(est).reduce((a,b)=>a+Math.max(0,b),0);
+}
+
+function modelosAtivos() {
+  const nomes = new Set(entradas.map(e=>e.modelo));
+  return nomes.size;
+}
+
+function movMes(lista) {
+  const now = new Date();
+  return lista.filter(i=>{
+    const d = new Date(i.data+'T12:00:00');
+    return d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear();
+  }).reduce((a,b)=>a+Number(b.qtd),0);
+}
+
+// ── RENDER ESTOQUE ───────────────────────────────────────
+function renderEstoque(filtro='') {
+  const grupos = getEstoqueAgrupado();
+  const grid = document.getElementById('estoque-grid');
+  const ordem = ['PP','P','M','G','GG','XGG','Único','Inf. 2','Inf. 4','Inf. 6','Inf. 8','Inf. 10','Inf. 12','Inf. 14','Inf. 16'];
+  let html = '';
+  const keys = Object.keys(grupos).filter(k=>{
+    if(!filtro) return true;
+    return k.toLowerCase().includes(filtro.toLowerCase());
+  });
+  if(!keys.length){
+    grid.innerHTML = '<div class="empty"><div class="empty-icon">👕</div>Nenhum produto encontrado.</div>';
+    return;
+  }
+  keys.sort().forEach(k=>{
+    const g = grupos[k];
+    const total = Object.values(g.tamanhos).reduce((a,b)=>a+Math.max(0,b),0);
+
+    // calcular valor de estoque: custo médio por tamanho × qtd
+    let valorEstoque = 0;
+    Object.entries(g.tamanhos).forEach(([sz, q]) => {
+      if(q <= 0) return;
+      const ents = entradas.filter(e=>e.modelo===g.modelo&&e.cor===g.cor&&e.tamanho===sz);
+      const custoMedio = custoMedioPonderado(g.modelo, g.cor, sz);
+      valorEstoque += custoMedio * q;
+    });
+
+    const tams = Object.entries(g.tamanhos)
+      .sort((a,b)=>(ordem.indexOf(a[0])-(ordem.indexOf(b[0]))))
+      .map(([sz,q])=>{
+        const cls = q<=0?'zero':q<=3?'low':'ok';
+        return `<div class="size-pill ${cls}"><span class="sz">${sz}</span><span class="qty">${Math.max(0,q)}</span></div>`;
+      }).join('');
+
+    html += `<div class="ecard">
+      <div class="ecard-name">${esc(g.modelo)}</div>
+      <div class="ecard-model">Cor: ${esc(g.cor)} &nbsp;·&nbsp; <strong>${total}</strong> pcs</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">
+        Valor em estoque: <span style="color:var(--accent);font-weight:600;">${fmt(valorEstoque)}</span>
+      </div>
+      <div class="ecard-sizes">${tams}</div>
+    </div>`;
+  });
+  grid.innerHTML = html || '<div class="empty">Nenhum item com estoque.</div>';
+}
+
+// ── RENDER TABELA ENTRADAS ───────────────────────────────
+function renderEntradas() {
+  const tb = document.getElementById('tbody-entradas');
+  if(!entradas.length){ tb.innerHTML='<tr><td colspan="11" class="empty">Nenhuma entrada registrada.</td></tr>'; return; }
+  tb.innerHTML = [...entradas].reverse().map((e,i)=>{
+    const idx = entradas.length-1-i;
+    const frete = e.frete||0;
+    return `<tr>
+      <td>${fmtData(e.data)}</td><td>${esc(e.modelo)}</td><td>${esc(e.cor)}</td>
+      <td>${esc(e.tamanho)}</td><td>${esc(e.fornecedor)||'—'}</td><td><strong>${e.qtd}</strong></td>
+      <td>${fmt(e.custo)}</td><td>${frete>0?fmt(frete):'—'}</td>
+      <td>${fmt(e.custo*e.qtd+frete)}</td>
+      <td style="color:var(--muted);font-size:12px">${esc(e.obs)||'—'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="delEntrada(${idx})">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── RENDER TABELA SAIDAS ─────────────────────────────────
+function renderSaidas() {
+  const tb = document.getElementById('tbody-saidas');
+  if(!saidas.length){ tb.innerHTML='<tr><td colspan="12" class="empty">Nenhuma venda registrada.</td></tr>'; return; }
+  tb.innerHTML = [...saidas].reverse().map((s,i)=>{
+    const idx = saidas.length-1-i;
+    const desc  = s.desconto||0;
+    const total = (s.preco - desc) * s.qtd;
+    const receita = s.preco - desc;
+    const pct   = receita>0 ? ((s.lucroLiq/receita)*100) : 0;
+    const llCor = s.lucroLiq>=0 ? 'var(--success)' : 'var(--danger)';
+    const pctCor= pct>=0 ? 'var(--success)' : 'var(--danger)';
+    return `<tr>
+      <td>${fmtData(s.data)}</td>
+      <td style="font-size:12px">${esc(s.modelo)} · ${esc(s.cor)} · ${esc(s.tamanho)}</td>
+      <td>${esc(s.estampa)||'—'}</td>
+      <td>${esc(s.canal)||'—'}</td>
+      <td><strong>${s.qtd}</strong></td>
+      <td>${fmt(s.preco)}</td>
+      <td>${desc>0?fmt(desc):'—'}</td>
+      <td>${fmt(total)}</td>
+      <td style="color:${llCor};font-weight:600">${fmt(s.lucroLiq)}</td>
+      <td style="color:${pctCor};font-weight:600">${pct.toFixed(1)}%</td>
+      <td style="color:var(--muted);font-size:12px">${esc(s.obs)||'—'}</td>
+      <td style="display:flex;gap:6px;">
+        <button class="btn btn-sm" style="background:var(--card);border:1px solid var(--border);color:var(--text);" onclick="abrirModal(${idx})">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="delSaida(${idx})">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── RENDER RELATÓRIO ─────────────────────────────────────
+function renderRelatorio() {
+  const filtro = document.getElementById('rel-filtro').value;
+  const now = new Date();
+  function pass(d){
+    const dt = new Date(d+'T12:00:00');
+    if(filtro==='mes') return dt.getMonth()===now.getMonth()&&dt.getFullYear()===now.getFullYear();
+    if(filtro==='7dias'){ const diff=(now-dt)/86400000; return diff>=0&&diff<=7; }
+    return true;
+  }
+  const ents = entradas.filter(e=>pass(e.data));
+  const sais = saidas.filter(s=>pass(s.data));
+  const totalComprado  = ents.reduce((a,b)=>a+b.custo*b.qtd,0);
+  const totalVendido   = sais.reduce((a,b)=>a+(b.preco-(b.desconto||0))*b.qtd,0);
+  const totalLucroLiq  = sais.reduce((a,b)=>a+(b.lucroLiq||0)*b.qtd,0);
+  const pctLucroLiq    = totalVendido>0 ? (totalLucroLiq/totalVendido*100) : 0;
+
+  document.getElementById('rel-comprado').textContent  = fmt(totalComprado);
+  document.getElementById('rel-vendido').textContent   = fmt(totalVendido);
+  document.getElementById('rel-lucro').textContent     = fmt(totalVendido-totalComprado);
+  document.getElementById('rel-lucro-liq').textContent = fmt(totalLucroLiq);
+  document.getElementById('rel-lucro-liq').style.color = totalLucroLiq>=0?'var(--success)':'var(--danger)';
+  document.getElementById('rel-pct-liq').textContent   = pctLucroLiq.toFixed(1)+'%';
+  document.getElementById('rel-pct-liq').style.color   = pctLucroLiq>=0?'var(--accent)':'var(--danger)';
+
+  const movs = [
+    ...ents.map(e=>({...e,tipo:'Entrada',valor:e.custo})),
+    ...sais.map(s=>({...s,tipo:'Venda',valor:s.preco}))
+  ].sort((a,b)=>b.data.localeCompare(a.data));
+
+  const tb = document.getElementById('tbody-relatorio');
+  if(!movs.length){ tb.innerHTML='<tr><td colspan="8" class="empty">Nenhuma movimentação no período.</td></tr>'; return; }
+  tb.innerHTML = movs.map(m=>`<tr>
+    <td>${fmtData(m.data)}</td>
+    <td><span class="badge ${m.tipo==='Entrada'?'badge-entrada':'badge-saida'}">${m.tipo}</span></td>
+    <td>${esc(m.modelo)}</td><td>${esc(m.cor)}</td><td>${esc(m.tamanho)}</td>
+    <td>${m.qtd}</td><td>${fmt(m.valor)}</td><td>${fmt(m.valor*m.qtd)}</td>
+  </tr>`).join('');
+}
+
+// ── SUMMARIES ─────────────────────────────────────────────
+function renderSummary() {
+  document.getElementById('sc-total').textContent   = totalEstoque();
+  document.getElementById('sc-entrada').textContent = movMes(entradas);
+  document.getElementById('sc-saida').textContent   = movMes(saidas);
+  document.getElementById('sc-modelos').textContent = modelosAtivos();
+
+  // valor total em estoque (custo médio × qtd disponível)
+  const est = calcEstoque();
+  let valorTotal = 0;
+  Object.entries(est).forEach(([k, q]) => {
+    if(q <= 0) return;
+    const [modelo,cor,tamanho] = k.split('||');
+    const ents = entradas.filter(e=>e.modelo===modelo&&e.cor===cor&&e.tamanho===tamanho);
+    const custoMedio = custoMedioPonderado(modelo, cor, tamanho);
+    valorTotal += custoMedio * q;
+  });
+  document.getElementById('sc-valor-estoque').textContent = fmt(valorTotal);
+}
+
+// ── SELECT ÚNICO DE PEÇAS COM ESTOQUE ────────────────────
+function atualizarSelectVendas() {
+  const est = calcEstoque();
+
+  // popular select de fornecedores
+  const fornecedores = [...new Set(entradas.map(e=>e.fornecedor).filter(Boolean))].sort();
+  const selForn = document.getElementById('sai-filtro-fornecedor');
+  const prevForn = selForn.value;
+  selForn.innerHTML = '<option value="">Todos os fornecedores</option>';
+  fornecedores.forEach(f => selForn.innerHTML += `<option${f===prevForn?' selected':''}>${esc(f)}</option>`);
+
+  // datalist fornecedores na aba entradas
+  const dlForn = document.getElementById('fornecedores-list');
+  if(dlForn) dlForn.innerHTML = fornecedores.map(f=>`<option value="${esc(f)}">`).join('');
+
+  // filtrar peças pelo fornecedor selecionado
+  const fornFiltro = selForn.value;
+
+  const sel = document.getElementById('sai-peca');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">Selecione a peça disponível</option>';
+
+  // monta lista de peças com estoque > 0, filtrada por fornecedor
+  const pecas = Object.entries(est)
+    .filter(([,q])=>q>0)
+    .map(([k,q])=>{
+      const [modelo,cor,tamanho] = k.split('||');
+      // fornecedores que têm esse modelo/cor/tamanho
+      const fors = [...new Set(entradas.filter(e=>e.modelo===modelo&&e.cor===cor&&e.tamanho===tamanho&&e.fornecedor).map(e=>e.fornecedor))];
+      return {modelo,cor,tamanho,q,key:k,fors};
+    })
+    .filter(p => !fornFiltro || p.fors.includes(fornFiltro))
+    .sort((a,b)=>a.modelo.localeCompare(b.modelo)||a.cor.localeCompare(b.cor));
+
+  pecas.forEach(p=>{
+    const val = p.key;
+    const fornLabel = p.fors.length ? ` [${esc(p.fors.join(', '))}]` : '';
+    const txt = `${esc(p.modelo)} · ${esc(p.cor)} · ${esc(p.tamanho)}${fornLabel}  (${p.q} disp.)`;
+    sel.innerHTML += `<option value="${esc(val)}"${val===prev?' selected':''}>${txt}</option>`;
+  });
+
+  // datalist modelos na aba entradas
+  const modelos = [...new Set(entradas.map(e=>e.modelo))].sort();
+  const dl = document.getElementById('modelos-list');
+  if(dl) dl.innerHTML = modelos.map(m=>`<option value="${esc(m)}">`).join('');
+
+  calcularLucroLiq();
+}
+
+// ── CALCULAR LUCRO LÍQUIDO (prévia) ──────────────────────
+function calcularLucroLiq() {
+  const pecaKey = document.getElementById('sai-peca').value;
+  const preco   = parseFloat(document.getElementById('sai-preco').value)||0;
+  const desconto= parseFloat(document.getElementById('sai-desconto').value)||0;
+  const canal   = document.getElementById('sai-canal').value;
+  const painel  = document.getElementById('painel-lucro');
+
+  if(!pecaKey||!preco){ painel.style.display='none'; return; }
+
+  const [modelo,cor,tamanho] = pecaKey.split('||');
+
+  // custo médio ponderado da camisa
+  const custoCamisa = custoMedioPonderado(modelo, cor, tamanho);
+
+  // custos adicionais por peça
+  const custosExtras = (custos.dtf||0) + (custos.embalagem||0) + (custos.outros||0);
+
+  // receita líquida após desconto
+  const receitaLiq = preco - desconto;
+
+  // taxa canal
+  let taxa = 0;
+  let taxaFixa = 0;
+  if(canal === 'Shopee') { taxa = receitaLiq * 0.20; taxaFixa = 4; }
+
+  const lucro = receitaLiq - custoCamisa - custosExtras - taxa - taxaFixa;
+
+  // atualizar painel
+  document.getElementById('ll-receita').textContent       = fmt(receitaLiq);
+  document.getElementById('ll-custo-camisa').textContent  = '- ' + fmt(custoCamisa);
+  document.getElementById('ll-custos-extras').textContent = '- ' + fmt(custosExtras);
+
+  const llTaxaLabel = document.getElementById('ll-taxa-label');
+  const llTaxa      = document.getElementById('ll-taxa');
+  if(canal === 'Shopee') {
+    llTaxaLabel.style.display = '';
+    llTaxa.textContent = `- ${fmt(taxa + taxaFixa)} (20% + R$ 4,00)`;
+  } else {
+    llTaxaLabel.style.display = 'none';
+  }
+
+  const llVal = document.getElementById('ll-valor');
+  llVal.textContent = fmt(lucro);
+  llVal.style.color = lucro >= 0 ? 'var(--success)' : 'var(--danger)';
+  painel.style.display = '';
+
+  return { custoCamisa, custosExtras, taxa, taxaFixa, lucro };
+}
+
+function atualizarDisponivel() {
+  const pecaKey = document.getElementById('sai-peca').value;
+  const el = document.getElementById('sai-disponivel');
+  if(!pecaKey){ el.textContent=''; return; }
+  const est = calcEstoque();
+  const disp = Math.max(0, est[pecaKey]||0);
+  el.textContent = `Disponível: ${disp} peça(s)`;
+  calcularLucroLiq();
+}
+
+// ── ADD ENTRADA ───────────────────────────────────────────
+document.getElementById('btn-add-entrada').addEventListener('click',()=>{
+  const modelo      = document.getElementById('ent-modelo').value.trim();
+  const cor         = document.getElementById('ent-cor').value.trim();
+  const tamanho     = document.getElementById('ent-tamanho').value;
+  const fornecedor  = document.getElementById('ent-fornecedor').value.trim();
+  const qtd         = parseInt(document.getElementById('ent-qtd').value);
+  const custo       = parseFloat(document.getElementById('ent-custo').value)||0;
+  const frete       = parseFloat(document.getElementById('ent-frete').value)||0;
+  const data        = document.getElementById('ent-data').value;
+  const obs         = document.getElementById('ent-obs').value.trim();
+  if(!modelo||!cor||!tamanho||!qtd||qtd<1||!data){
+    alert('Preencha todos os campos obrigatórios (Modelo, Cor, Tamanho, Quantidade e Data).');
+    return;
+  }
+  entradas.push({modelo,cor,tamanho,fornecedor,qtd,custo,frete,data,obs});
+  salvar();
+  renderAll();
+  document.getElementById('ent-modelo').value='';
+  document.getElementById('ent-cor').value='';
+  document.getElementById('ent-tamanho').value='';
+  document.getElementById('ent-fornecedor').value='';
+  document.getElementById('ent-qtd').value='';
+  document.getElementById('ent-custo').value='';
+  document.getElementById('ent-frete').value='';
+  document.getElementById('ent-obs').value='';
+  document.getElementById('ent-data').value=hoje();
+});
+
+// ── ADD SAIDA ─────────────────────────────────────────────
+document.getElementById('btn-add-saida').addEventListener('click',()=>{
+  const pecaKey = document.getElementById('sai-peca').value;
+  const estampa = document.getElementById('sai-estampa').value.trim();
+  const canal   = document.getElementById('sai-canal').value;
+  const qtd     = parseInt(document.getElementById('sai-qtd').value);
+  const preco   = parseFloat(document.getElementById('sai-preco').value)||0;
+  const desconto= parseFloat(document.getElementById('sai-desconto').value)||0;
+  const data    = document.getElementById('sai-data').value;
+  const obs     = document.getElementById('sai-obs').value.trim();
+
+  if(!pecaKey||!qtd||qtd<1||!preco||!data){
+    alert('Preencha: Peça, Quantidade, Preço e Data.');
+    return;
+  }
+
+  const est = calcEstoque();
+  const disp = Math.max(0, est[pecaKey]||0);
+  if(qtd>disp){ alert(`Estoque insuficiente! Disponível: ${disp} peça(s).`); return; }
+
+  const [modelo,cor,tamanho] = pecaKey.split('||');
+  const calc = calcularLucroLiq();
+  const lucroLiq = calc ? calc.lucro : 0;
+
+  saidas.push({modelo,cor,tamanho,estampa,canal,qtd,preco,desconto,lucroLiq,data,obs});
+  salvar();
+  renderAll();
+
+  document.getElementById('sai-peca').value='';
+  document.getElementById('sai-estampa').value='';
+  document.getElementById('sai-canal').value='';
+  document.getElementById('sai-qtd').value='';
+  document.getElementById('sai-preco').value='';
+  document.getElementById('sai-desconto').value='';
+  document.getElementById('sai-obs').value='';
+  document.getElementById('sai-data').value=hoje();
+  document.getElementById('painel-lucro').style.display='none';
+  document.getElementById('sai-disponivel').textContent='';
+});
+
+// ── DELETE ────────────────────────────────────────────────
+window.delEntrada = function(i) {
+  if(!confirm('Remover esta entrada?')) return;
+  entradas.splice(i,1); salvar(); renderAll();
+};
+window.delSaida = function(i) {
+  if(!confirm('Remover esta venda?')) return;
+  saidas.splice(i,1); salvar(); renderAll();
+};
+
+// ── MODAL EDIÇÃO VENDA ────────────────────────────────────
+window.abrirModal = function(idx) {
+  const s = saidas[idx];
+  if(!s) return;
+
+  // popular select de peças (todas com estoque + a atual mesmo que zerada)
+  const est = calcEstoque();
+  const selP = document.getElementById('edit-peca');
+  selP.innerHTML = '<option value="">Selecione</option>';
+  const pecaAtual = `${s.modelo}||${s.cor}||${s.tamanho}`;
+
+  // garante que a peça original apareça no select
+  const keys = new Set(Object.keys(est).filter(k=>est[k]>0));
+  keys.add(pecaAtual);
+  [...keys].sort().forEach(k=>{
+    const [modelo,cor,tamanho] = k.split('||');
+    const disp = Math.max(0, est[k]||0);
+    const txt = `${esc(modelo)} · ${esc(cor)} · ${esc(tamanho)} (${disp} disp.)`;
+    selP.innerHTML += `<option value="${esc(k)}"${k===pecaAtual?' selected':''}>${txt}</option>`;
+  });
+
+  document.getElementById('edit-idx').value       = idx;
+  document.getElementById('edit-estampa').value   = s.estampa||'';
+  document.getElementById('edit-canal').value     = s.canal||'';
+  document.getElementById('edit-qtd').value       = s.qtd;
+  document.getElementById('edit-preco').value     = s.preco;
+  document.getElementById('edit-desconto').value  = s.desconto||0;
+  document.getElementById('edit-data').value      = s.data;
+  document.getElementById('edit-obs').value       = s.obs||'';
+
+  const modal = document.getElementById('modal-edit');
+  modal.style.display = 'flex';
+};
+
+window.fecharModal = function() {
+  document.getElementById('modal-edit').style.display = 'none';
+};
+
+// fechar clicando fora
+document.getElementById('modal-edit').addEventListener('click', function(e){
+  if(e.target === this) fecharModal();
+});
+
+document.getElementById('btn-salvar-edit').addEventListener('click', ()=>{
+  const idx      = parseInt(document.getElementById('edit-idx').value);
+  const pecaKey  = document.getElementById('edit-peca').value;
+  const estampa  = document.getElementById('edit-estampa').value.trim();
+  const canal    = document.getElementById('edit-canal').value;
+  const qtd      = parseInt(document.getElementById('edit-qtd').value);
+  const preco    = parseFloat(document.getElementById('edit-preco').value)||0;
+  const desconto = parseFloat(document.getElementById('edit-desconto').value)||0;
+  const data     = document.getElementById('edit-data').value;
+  const obs      = document.getElementById('edit-obs').value.trim();
+
+  if(!pecaKey||!qtd||qtd<1||!preco||!data){
+    alert('Preencha: Peça, Quantidade, Preço e Data.');
+    return;
+  }
+
+  const [modelo,cor,tamanho] = pecaKey.split('||');
+
+  // recalcular lucro líquido com os novos valores
+  const custoCamisa  = custoMedioPonderado(modelo, cor, tamanho);
+  const custosExtras = (custos.dtf||0)+(custos.embalagem||0)+(custos.outros||0);
+  const receitaLiq   = preco - desconto;
+  let taxa=0, taxaFixa=0;
+  if(canal==='Shopee'){ taxa=receitaLiq*0.20; taxaFixa=4; }
+  const lucroLiq = receitaLiq - custoCamisa - custosExtras - taxa - taxaFixa;
+
+  saidas[idx] = {modelo,cor,tamanho,estampa,canal,qtd,preco,desconto,lucroLiq,data,obs};
+  salvar();
+  renderAll();
+  fecharModal();
+  showToast('✅ Venda atualizada!');
+});
+
+// ── EXPORTAR CSV ──────────────────────────────────────────
+document.getElementById('btn-exportar').addEventListener('click',()=>{
+  const rows = [['Data','Tipo','Modelo','Cor','Tamanho','Qtd','Valor Unit.','Total']];
+  entradas.forEach(e=>rows.push([e.data,'Entrada',e.modelo,e.cor,e.tamanho,e.qtd,e.custo,(e.custo*e.qtd).toFixed(2)]));
+  saidas.forEach(s=>rows.push([s.data,'Venda',s.modelo,s.cor,s.tamanho,s.qtd,s.preco,(s.preco*s.qtd).toFixed(2)]));
+  const csv  = '\uFEFF' + rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `estoque_estamparia_${hoje()}.csv`;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 300);
+});
+
+// ── TABS ──────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab==='relatorio') renderRelatorio();
+    if(btn.dataset.tab==='saidas') atualizarSelectVendas();
+  });
+});
+
+// ── FILTRO ESTOQUE ────────────────────────────────────────
+document.getElementById('busca-estoque').addEventListener('input',e=>{
+  renderEstoque(e.target.value);
+});
+
+// ── SELECTS DINÂMICOS ─────────────────────────────────────
+document.getElementById('sai-filtro-fornecedor').addEventListener('change', atualizarSelectVendas);
+document.getElementById('sai-peca').addEventListener('change', atualizarDisponivel);
+document.getElementById('sai-canal').addEventListener('change', calcularLucroLiq);
+document.getElementById('sai-preco').addEventListener('input', calcularLucroLiq);
+document.getElementById('sai-desconto').addEventListener('input', calcularLucroLiq);
+document.getElementById('rel-filtro').addEventListener('change', renderRelatorio);
+
+// ── RENDER ALL ────────────────────────────────────────────
+function renderAll() {
+  renderEstoque(document.getElementById('busca-estoque').value);
+  renderEntradas();
+  renderSaidas();
+  renderSummary();
+  atualizarSelectVendas();
+  if(document.getElementById('tab-relatorio').classList.contains('active')) renderRelatorio();
+}
+
+// ── TOAST ─────────────────────────────────────────────────
+function showToast(msg, erro=false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (erro?' error':'');
+  clearTimeout(t._t);
+  t._t = setTimeout(()=>t.classList.remove('show'), 3000);
+}
+
+// ── CUSTOS ────────────────────────────────────────────────
+function renderCustos() {
+  document.getElementById('cust-dtf').value         = custos.dtf||'';
+  document.getElementById('cust-embalagem').value   = custos.embalagem||'';
+  document.getElementById('cust-outros').value      = custos.outros||'';
+  document.getElementById('cust-outros-desc').value = custos.outrosDesc||'';
+  atualizarResumoCustos();
+}
+
+function atualizarResumoCustos() {
+  const dtf  = parseFloat(document.getElementById('cust-dtf').value)||0;
+  const emb  = parseFloat(document.getElementById('cust-embalagem').value)||0;
+  const out  = parseFloat(document.getElementById('cust-outros').value)||0;
+  const desc = document.getElementById('cust-outros-desc').value.trim();
+  document.getElementById('res-dtf').textContent       = fmt(dtf);
+  document.getElementById('res-embalagem').textContent = fmt(emb);
+  document.getElementById('res-outros').textContent    = fmt(out);
+  document.getElementById('res-outros-lbl').textContent= desc||'Outros';
+  document.getElementById('res-total').textContent     = fmt(dtf+emb+out);
+}
+
+document.getElementById('btn-salvar-custos').addEventListener('click',()=>{
+  custos.dtf        = parseFloat(document.getElementById('cust-dtf').value)||0;
+  custos.embalagem  = parseFloat(document.getElementById('cust-embalagem').value)||0;
+  custos.outros     = parseFloat(document.getElementById('cust-outros').value)||0;
+  custos.outrosDesc = document.getElementById('cust-outros-desc').value.trim();
+  salvar();
+  atualizarResumoCustos();
+  showToast('✅ Custos salvos!');
+});
+
+['cust-dtf','cust-embalagem','cust-outros','cust-outros-desc'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', atualizarResumoCustos);
+});
+
+// ── HELPERS MODAL BACKUP ─────────────────────────────────
+function abrirModalSalvar() {
+  const dados = { entradas, saidas, custos, salvo_em: new Date().toISOString() };
+  document.getElementById('backup-textarea').value = JSON.stringify(dados, null, 2);
+  document.getElementById('modo-salvar').style.display    = 'block';
+  document.getElementById('modo-restaurar').style.display = 'none';
+  document.getElementById('modal-backup-title').textContent = '💾 SALVAR BACKUP';
+  document.getElementById('modal-backup').classList.add('open');
+}
+
+function abrirModalRestaurar() {
+  document.getElementById('restaurar-textarea').value = '';
+  document.getElementById('modo-salvar').style.display    = 'none';
+  document.getElementById('modo-restaurar').style.display = 'block';
+  document.getElementById('modal-backup-title').textContent = '📥 RESTAURAR BACKUP';
+  document.getElementById('modal-backup').classList.add('open');
+  // foco automático no textarea para facilitar colar no celular
+  setTimeout(() => { document.getElementById('restaurar-textarea').focus(); }, 300);
+}
+
+function fecharModalBackup() {
+  document.getElementById('modal-backup').classList.remove('open');
+}
+
+// ── SALVAR BACKUP ─────────────────────────────────────────
+document.getElementById('btn-salvar-backup').addEventListener('click', () => {
+  const dados = { entradas, saidas, custos, salvo_em: new Date().toISOString() };
+  const json  = JSON.stringify(dados, null, 2);
+  const nome  = `backup_estoque_${hoje()}.json`;
+
+  // tenta download (funciona no desktop)
+  try {
+    const blob = new Blob([json], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = nome; a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 400);
+  } catch(e) {}
+
+  abrirModalSalvar();
+});
+
+// ── CARREGAR BACKUP ───────────────────────────────────────
+document.getElementById('btn-importar').addEventListener('click', () => {
+  // tenta abrir seletor de arquivo nativo
+  try { document.getElementById('input-importar').click(); } catch(e) {}
+  // sempre abre o modal de restaurar via texto
+  abrirModalRestaurar();
+});
+
+document.getElementById('btn-fechar-backup').addEventListener('click', fecharModalBackup);
+document.getElementById('btn-fechar-backup-2').addEventListener('click', fecharModalBackup);
+document.getElementById('modal-backup').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalBackup();
+});
+
+document.getElementById('btn-copiar-backup').addEventListener('click', () => {
+  const texto = document.getElementById('backup-textarea').value;
+  if (!texto) { showToast('⚠️ Nada para copiar. Clique em Backup primeiro.', true); return; }
+  navigator.clipboard.writeText(texto)
+    .then(() => showToast('✅ Copiado! Cole no WhatsApp ou Google Keep.'))
+    .catch(() => {
+      // fallback
+      const ta = document.getElementById('backup-textarea');
+      ta.removeAttribute('readonly');
+      ta.select();
+      document.execCommand('copy');
+      ta.setAttribute('readonly','');
+      showToast('✅ Copiado!');
+    });
+});
+
+document.getElementById('btn-confirmar-restaurar').addEventListener('click', () => {
+  const texto = document.getElementById('restaurar-textarea').value.trim();
+  if (!texto) { showToast('⚠️ Cole o texto do backup primeiro.', true); return; }
+  try {
+    const dados = JSON.parse(texto);
+    if (!Array.isArray(dados.entradas) || !Array.isArray(dados.saidas)) {
+      showToast('❌ Texto inválido. Verifique se copiou o backup completo.', true);
+      return;
+    }
+    // aplica diretamente sem confirm() — bloqueado no Android local
+    entradas = dados.entradas;
+    saidas   = dados.saidas;
+    if (dados.custos) custos = dados.custos;
+    salvar();
+    renderAll();
+    renderCustos();
+    fecharModalBackup();
+    showToast('✅ Dados restaurados com sucesso!');
+  } catch(e) {
+    showToast('❌ Erro ao ler. Verifique se copiou o texto completo.', true);
+  }
+});
+
+document.getElementById('input-importar').addEventListener('change', function() {
+  const file = this.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const dados = JSON.parse(e.target.result);
+      if (!Array.isArray(dados.entradas) || !Array.isArray(dados.saidas)) {
+        showToast('❌ Arquivo inválido.', true); return;
+      }
+      entradas = dados.entradas;
+      saidas   = dados.saidas;
+      if (dados.custos) custos = dados.custos;
+      salvar(); renderAll(); renderCustos();
+      fecharModalBackup();
+      showToast('✅ Backup carregado com sucesso!');
+    } catch(err) { showToast('❌ Erro ao ler o arquivo.', true); }
+  };
+  reader.readAsText(file);
+  this.value = '';
+});
+
+iniciarSync();
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dd-estoque-v1';
+const CACHE_NAME = 'dd-estoque-v2';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -35,6 +35,22 @@ self.addEventListener('fetch', (event) => {
   // Deixa Firebase/Firestore sempre ir direto pra rede (dados em tempo real).
   if (url.origin !== self.location.origin) return;
 
+  // Página HTML: sempre tenta buscar a versão mais nova primeiro.
+  // Só usa o cache se estiver offline — evita ficar preso numa versão antiga.
+  if (request.mode === 'navigate' || request.destination === 'document') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          return response;
+        })
+        .catch(() => caches.match(request).then((cached) => cached || caches.match('/index.html')))
+    );
+    return;
+  }
+
+  // Demais arquivos (ícones, manifest...): usa o cache na hora e atualiza por trás.
   event.respondWith(
     caches.match(request).then((cached) => {
       const network = fetch(request)

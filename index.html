@@ -360,7 +360,25 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
   }
+  .filtro-control {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 13px;
+    outline: none;
+  }
+  .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+  .chart-grid .chart-card { margin-bottom: 0; }
   .stat-row {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -866,12 +884,16 @@
   <div class="tab-content" id="tab-relatorio">
     <div class="report-header">
       <div class="section-title" style="margin:0;">Relatório Geral</div>
-      <div style="display:flex;gap:10px;">
-        <select id="rel-filtro" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <select id="rel-filtro" class="filtro-control">
           <option value="tudo">Todo período</option>
           <option value="mes">Este mês</option>
           <option value="7dias">Últimos 7 dias</option>
+          <option value="custom">Período personalizado</option>
         </select>
+        <input type="date" id="rel-data-ini" class="filtro-control" style="display:none;" aria-label="Data inicial">
+        <span id="rel-data-sep" style="display:none;color:var(--muted);font-size:13px;">até</span>
+        <input type="date" id="rel-data-fim" class="filtro-control" style="display:none;" aria-label="Data final">
         <button class="btn btn-primary" id="btn-exportar">⬇ Exportar CSV</button>
       </div>
     </div>
@@ -911,10 +933,30 @@
       <div class="chart-scroll" id="chart-fluxo"></div>
     </div>
 
-    <div class="chart-card">
-      <div class="chart-card-title">Top Modelos Vendidos</div>
-      <div class="chart-card-sub">Peças vendidas por modelo, no período</div>
-      <div id="chart-top-modelos"></div>
+    <div class="chart-grid">
+      <div class="chart-card">
+        <div class="chart-card-title">Top Modelos Vendidos</div>
+        <div class="chart-card-sub">Peças vendidas por modelo, no período</div>
+        <div id="chart-top-modelos"></div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-card-title">Top Estampas Vendidas</div>
+        <div class="chart-card-sub">Peças vendidas por estampa, no período</div>
+        <div id="chart-top-estampas"></div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-card-title">Top Cores Vendidas</div>
+        <div class="chart-card-sub">Peças vendidas por cor, no período</div>
+        <div id="chart-top-cores"></div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-card-title">Top Tamanhos Vendidos</div>
+        <div class="chart-card-sub">Peças vendidas por tamanho, no período</div>
+        <div id="chart-top-tamanhos"></div>
+      </div>
     </div>
 
     <div class="section-title">Movimentações</div>
@@ -1256,6 +1298,14 @@ function renderRelatorio() {
     const dt = new Date(d+'T12:00:00');
     if(filtro==='mes') return dt.getMonth()===now.getMonth()&&dt.getFullYear()===now.getFullYear();
     if(filtro==='7dias'){ const diff=(now-dt)/86400000; return diff>=0&&diff<=7; }
+    if(filtro==='custom'){
+      const ini = document.getElementById('rel-data-ini').value;
+      const fim = document.getElementById('rel-data-fim').value;
+      if(!ini && !fim) return true;
+      if(ini && d < ini) return false;
+      if(fim && d > fim) return false;
+      return true;
+    }
     return true;
   }
   const ents = entradas.filter(e=>pass(e.data));
@@ -1274,7 +1324,10 @@ function renderRelatorio() {
   document.getElementById('rel-pct-liq').style.color   = pctLucroLiq>=0?'var(--accent)':'var(--danger)';
 
   renderChartFluxo(ents, sais, filtro);
-  renderChartTopModelos(sais);
+  renderRankingChart('chart-top-modelos', sais, 'modelo', { icon:'👕' });
+  renderRankingChart('chart-top-estampas', sais, 'estampa', { icon:'🎨', vazioRotulo:'Sem estampa' });
+  renderRankingChart('chart-top-cores', sais, 'cor', { icon:'🎨' });
+  renderRankingChart('chart-top-tamanhos', sais, 'tamanho', { icon:'📏' });
 
   const movs = [
     ...ents.map(e=>({...e,tipo:'Entrada',valor:e.custo})),
@@ -1310,18 +1363,47 @@ function getBucketKeys(filtro, ents, sais) {
     }
     return keys;
   }
+  if (filtro === 'custom') {
+    const iniStr = document.getElementById('rel-data-ini').value;
+    const fimStr = document.getElementById('rel-data-fim').value;
+    const todasDatas = [...ents, ...sais].map(x => x.data).filter(Boolean).sort();
+    if (!iniStr && !fimStr && !todasDatas.length) return [];
+    const ini = iniStr ? new Date(iniStr+'T12:00:00') : new Date(todasDatas[0]+'T12:00:00');
+    const fim = fimStr ? new Date(fimStr+'T12:00:00') : new Date(todasDatas[todasDatas.length-1]+'T12:00:00');
+    if (fim < ini) return [];
+    const diffDias = Math.round((fim-ini)/86400000);
+    if (diffDias <= 31) {
+      const keys = [];
+      for (let d = new Date(ini); d <= fim; d.setDate(d.getDate()+1)) {
+        keys.push(d.toISOString().split('T')[0]);
+      }
+      return keys;
+    }
+    // intervalo longo: agrupa por mês
+    const keys = [];
+    const cursor = new Date(ini.getFullYear(), ini.getMonth(), 1);
+    const fimMes = new Date(fim.getFullYear(), fim.getMonth(), 1);
+    while (cursor <= fimMes) {
+      keys.push(`${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,'0')}`);
+      cursor.setMonth(cursor.getMonth()+1);
+    }
+    return keys;
+  }
   // tudo: um bucket por mês com movimentação, do mais antigo ao mais novo
   const meses = new Set([...ents, ...sais].map(x => x.data).filter(Boolean).map(d => d.slice(0,7)));
   return [...meses].sort();
 }
 
-function bucketLabel(key, filtro) {
-  if (filtro === 'tudo') {
-    const [y, m] = key.split('-');
+// detecta o formato da chave (mês "aaaa-mm" ou dia "aaaa-mm-dd") em vez de
+// depender do nome do filtro, já que "custom" pode gerar os dois formatos
+function bucketLabel(key) {
+  const partes = key.split('-');
+  if (partes.length === 2) {
+    const [y, m] = partes;
     const meses = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
     return `${meses[parseInt(m,10)-1]}/${y.slice(2)}`;
   }
-  const [, m, d] = key.split('-');
+  const [, m, d] = partes;
   return `${d}/${m}`;
 }
 
@@ -1421,12 +1503,12 @@ function renderChartFluxo(ents, sais, filtro) {
     container.innerHTML = '<div class="empty" style="padding:28px 10px;"><div class="empty-icon">📊</div>Sem movimentações no período.</div>';
     return;
   }
-  const isMonth = filtro === 'tudo';
+  const isMonth = keys[0].length === 7; // chave "aaaa-mm" (bucket por mês) vs "aaaa-mm-dd" (por dia)
   const entMap = {}, saiMap = {};
   ents.forEach(e => { const k = isMonth ? e.data.slice(0,7) : e.data; entMap[k] = (entMap[k]||0) + Number(e.qtd); });
   sais.forEach(s => { const k = isMonth ? s.data.slice(0,7) : s.data; saiMap[k] = (saiMap[k]||0) + Number(s.qtd); });
 
-  const data = keys.map(k => ({ label: bucketLabel(k, filtro), entrada: entMap[k]||0, venda: saiMap[k]||0 }));
+  const data = keys.map(k => ({ label: bucketLabel(k), entrada: entMap[k]||0, venda: saiMap[k]||0 }));
   const maxVal = Math.max(1, ...data.map(d => Math.max(d.entrada, d.venda)));
   const step = niceStep(maxVal);
   const axisMax = Math.ceil(maxVal / step) * step;
@@ -1466,23 +1548,30 @@ function renderChartFluxo(ents, sais, filtro) {
 }
 
 // ── GRÁFICO: TOP MODELOS VENDIDOS ────────────────────────
-function renderChartTopModelos(sais) {
-  const container = document.getElementById('chart-top-modelos');
-  const porModelo = {};
-  sais.forEach(s => { porModelo[s.modelo] = (porModelo[s.modelo]||0) + Number(s.qtd); });
-  const ranking = Object.entries(porModelo)
-    .map(([modelo, qtd]) => ({ modelo, qtd }))
+// ranking genérico: agrupa vendas por um campo (modelo/estampa/cor/tamanho)
+// e mostra os 5 que mais venderam no período
+function renderRankingChart(containerId, sais, campo, opts) {
+  opts = opts || {};
+  const container = document.getElementById(containerId);
+  const contagem = {};
+  sais.forEach(s => {
+    const valor = (s[campo] || '').toString().trim();
+    const chave = valor || opts.vazioRotulo || '—';
+    contagem[chave] = (contagem[chave]||0) + Number(s.qtd);
+  });
+  const ranking = Object.entries(contagem)
+    .map(([nome, qtd]) => ({ nome, qtd }))
     .sort((a,b) => b.qtd - a.qtd)
     .slice(0, 5);
 
   if (!ranking.length) {
-    container.innerHTML = '<div class="empty" style="padding:28px 10px;"><div class="empty-icon">👕</div>Nenhuma venda no período.</div>';
+    container.innerHTML = `<div class="empty" style="padding:28px 10px;"><div class="empty-icon">${opts.icon||'👕'}</div>Nenhuma venda no período.</div>`;
     return;
   }
   const maxQtd = ranking[0].qtd;
   container.innerHTML = ranking.map(r => {
     const pct = Math.max(4, Math.round((r.qtd/maxQtd)*100));
-    const nome = esc(r.modelo);
+    const nome = esc(r.nome);
     return `<div class="rank-row chart-bar" tabindex="0" data-label="${nome}" data-series="Vendidos" data-value="${r.qtd}" data-color="var(--chart-gold)">
       <div class="rank-label" title="${nome}">${nome}</div>
       <div class="rank-track"><div class="rank-fill" style="width:${pct}%;"></div></div>
@@ -1816,7 +1905,21 @@ document.getElementById('sai-peca').addEventListener('change', atualizarDisponiv
 document.getElementById('sai-canal').addEventListener('change', calcularLucroLiq);
 document.getElementById('sai-preco').addEventListener('input', calcularLucroLiq);
 document.getElementById('sai-desconto').addEventListener('input', calcularLucroLiq);
-document.getElementById('rel-filtro').addEventListener('change', renderRelatorio);
+document.getElementById('rel-filtro').addEventListener('change', function() {
+  const custom = this.value === 'custom';
+  document.getElementById('rel-data-ini').style.display = custom ? '' : 'none';
+  document.getElementById('rel-data-sep').style.display = custom ? '' : 'none';
+  document.getElementById('rel-data-fim').style.display = custom ? '' : 'none';
+  renderRelatorio();
+});
+document.getElementById('rel-data-ini').addEventListener('change', function() {
+  document.getElementById('rel-data-fim').min = this.value;
+  renderRelatorio();
+});
+document.getElementById('rel-data-fim').addEventListener('change', function() {
+  document.getElementById('rel-data-ini').max = this.value;
+  renderRelatorio();
+});
 
 // ── RENDER ALL ────────────────────────────────────────────
 function renderAll() {

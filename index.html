@@ -32,6 +32,11 @@
     --muted: #888;
     --font-display: 'Bebas Neue', sans-serif;
     --font-body: 'DM Sans', sans-serif;
+    /* Tons mais fechados que --accent2/--danger/--accent, para áreas grandes
+       de preenchimento (barras) em vez de texto/ícones pequenos. */
+    --chart-entrada: #239e95;
+    --chart-venda: #e8585a;
+    --chart-gold: #ad8f2a;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -373,6 +378,85 @@
   .stat-box .lbl { font-size: 11px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; }
   .stat-box .val { font-family: var(--font-display); font-size: 30px; }
 
+  /* GRÁFICOS DO RELATÓRIO */
+  .chart-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+  }
+  .chart-card-title {
+    font-family: var(--font-display);
+    font-size: 17px;
+    letter-spacing: 1px;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .chart-card-sub { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+  .chart-legend { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; }
+  .chart-legend-item { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+  .chart-legend-swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
+  .chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .chart-scroll svg { display: block; }
+  .chart-bar { cursor: pointer; }
+  path.chart-bar { transition: opacity 0.15s; }
+  path.chart-bar:hover, path.chart-bar.hover { opacity: 0.8; }
+  .rank-row.hover, .rank-row:hover { background: rgba(255,255,255,0.03); }
+  .rank-row.hover .rank-fill, .rank-row:hover .rank-fill { filter: brightness(1.12); }
+  .chart-tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.12s, transform 0.12s;
+    z-index: 1000;
+    max-width: 220px;
+  }
+  .chart-tooltip.show { opacity: 1; transform: translateY(0); }
+  .chart-tooltip .ctt-label { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+  .chart-tooltip .ctt-row { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); }
+  .chart-tooltip .ctt-row + .ctt-row { margin-top: 3px; }
+  .chart-tooltip .ctt-key { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .chart-tooltip .ctt-value { font-weight: 700; margin-left: auto; padding-left: 10px; }
+
+  .rank-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 4px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .rank-row:hover, .rank-row:focus-visible { background: rgba(255,255,255,0.03); outline: none; }
+  .rank-row + .rank-row { margin-top: 2px; }
+  .rank-label {
+    width: 38%;
+    max-width: 160px;
+    flex-shrink: 0;
+    font-size: 12.5px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .rank-track { flex: 1; height: 20px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .rank-fill { height: 100%; background: var(--chart-gold); border-radius: 0 4px 4px 0; min-width: 3px; }
+  .rank-value {
+    width: 44px;
+    flex-shrink: 0;
+    text-align: right;
+    font-family: var(--font-display);
+    font-size: 16px;
+    color: var(--accent);
+  }
+
   .empty {
     text-align: center;
     padding: 40px;
@@ -476,6 +560,7 @@
 </header>
 <input type="file" id="input-importar" accept=".json" style="position:fixed;top:-999px;left:-999px;opacity:0;width:1px;height:1px;">
 <div class="toast" id="toast"></div>
+<div class="chart-tooltip" id="chart-tooltip"></div>
 
 <!-- MODAL BACKUP -->
 <div class="modal-backup" id="modal-backup">
@@ -814,6 +899,22 @@
         <div class="lbl">% Lucro Líquido</div>
         <div class="val" id="rel-pct-liq" style="color:var(--accent)">0,0%</div>
       </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-title">Entradas × Vendas</div>
+      <div class="chart-card-sub">Peças compradas e vendidas por período</div>
+      <div class="chart-legend">
+        <div class="chart-legend-item"><span class="chart-legend-swatch" style="background:var(--chart-entrada);"></span>Entradas</div>
+        <div class="chart-legend-item"><span class="chart-legend-swatch" style="background:var(--chart-venda);"></span>Vendas</div>
+      </div>
+      <div class="chart-scroll" id="chart-fluxo"></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-title">Top Modelos Vendidos</div>
+      <div class="chart-card-sub">Peças vendidas por modelo, no período</div>
+      <div id="chart-top-modelos"></div>
     </div>
 
     <div class="section-title">Movimentações</div>
@@ -1172,6 +1273,9 @@ function renderRelatorio() {
   document.getElementById('rel-pct-liq').textContent   = pctLucroLiq.toFixed(1)+'%';
   document.getElementById('rel-pct-liq').style.color   = pctLucroLiq>=0?'var(--accent)':'var(--danger)';
 
+  renderChartFluxo(ents, sais, filtro);
+  renderChartTopModelos(sais);
+
   const movs = [
     ...ents.map(e=>({...e,tipo:'Entrada',valor:e.custo})),
     ...sais.map(s=>({...s,tipo:'Venda',valor:s.preco}))
@@ -1185,6 +1289,207 @@ function renderRelatorio() {
     <td>${esc(m.modelo)}</td><td>${esc(m.cor)}</td><td>${esc(m.tamanho)}</td>
     <td>${m.qtd}</td><td>${fmt(m.valor)}</td><td>${fmt(m.valor*m.qtd)}</td>
   </tr>`).join('');
+}
+
+// ── GRÁFICOS DO RELATÓRIO ────────────────────────────────
+function getBucketKeys(filtro, ents, sais) {
+  const hoje = new Date();
+  if (filtro === '7dias') {
+    const keys = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(hoje); d.setDate(d.getDate() - i);
+      keys.push(d.toISOString().split('T')[0]);
+    }
+    return keys;
+  }
+  if (filtro === 'mes') {
+    const ano = hoje.getFullYear(), mes = hoje.getMonth(), diaHoje = hoje.getDate();
+    const keys = [];
+    for (let dia = 1; dia <= diaHoje; dia++) {
+      keys.push(`${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`);
+    }
+    return keys;
+  }
+  // tudo: um bucket por mês com movimentação, do mais antigo ao mais novo
+  const meses = new Set([...ents, ...sais].map(x => x.data).filter(Boolean).map(d => d.slice(0,7)));
+  return [...meses].sort();
+}
+
+function bucketLabel(key, filtro) {
+  if (filtro === 'tudo') {
+    const [y, m] = key.split('-');
+    const meses = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+    return `${meses[parseInt(m,10)-1]}/${y.slice(2)}`;
+  }
+  const [, m, d] = key.split('-');
+  return `${d}/${m}`;
+}
+
+function niceStep(maxVal) {
+  if (maxVal <= 0) return 1;
+  const rough = maxVal / 4;
+  const pow = Math.pow(10, Math.floor(Math.log10(rough)));
+  const norm = rough / pow;
+  const step = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+  return step * pow;
+}
+
+function roundedTopRectPath(x, yTop, w, h, r) {
+  const yBase = yTop + h;
+  if (h <= 2) {
+    const top = yBase - Math.max(h, 2);
+    return `M${x},${yBase} L${x},${top} L${x+w},${top} L${x+w},${yBase} Z`;
+  }
+  r = Math.min(r, h, w/2);
+  return `M${x},${yBase} L${x},${yTop+r} Q${x},${yTop} ${x+r},${yTop} L${x+w-r},${yTop} Q${x+w},${yTop} ${x+w},${yTop+r} L${x+w},${yBase} Z`;
+}
+
+// ── TOOLTIP COMPARTILHADA DOS GRÁFICOS ───────────────────
+function positionChartTooltip(evtLike) {
+  const tip = document.getElementById('chart-tooltip');
+  const pad = 14;
+  const rect = tip.getBoundingClientRect();
+  let x = evtLike.clientX + pad;
+  let y = evtLike.clientY + pad;
+  if (x + rect.width > window.innerWidth - 8) x = evtLike.clientX - rect.width - pad;
+  if (y + rect.height > window.innerHeight - 8) y = evtLike.clientY - rect.height - pad;
+  tip.style.left = Math.max(8, x) + 'px';
+  tip.style.top  = Math.max(8, y) + 'px';
+}
+function showChartTooltip(evtLike, header, rows) {
+  const tip = document.getElementById('chart-tooltip');
+  tip.innerHTML = '';
+  if (header) {
+    const h = document.createElement('div');
+    h.className = 'ctt-label';
+    h.textContent = header;
+    tip.appendChild(h);
+  }
+  rows.forEach(r => {
+    const row = document.createElement('div');
+    row.className = 'ctt-row';
+    if (r.color) {
+      const key = document.createElement('span');
+      key.className = 'ctt-key';
+      key.style.background = r.color;
+      row.appendChild(key);
+    }
+    const label = document.createElement('span');
+    label.textContent = r.label;
+    row.appendChild(label);
+    const value = document.createElement('span');
+    value.className = 'ctt-value';
+    value.textContent = r.value;
+    row.appendChild(value);
+    tip.appendChild(row);
+  });
+  positionChartTooltip(evtLike);
+  tip.classList.add('show');
+}
+function hideChartTooltip() {
+  document.getElementById('chart-tooltip').classList.remove('show');
+}
+function attachBarTooltips(container, formatValue) {
+  container.querySelectorAll('.chart-bar[data-series]').forEach(bar => {
+    const show = (evtLike) => {
+      bar.classList.add('hover');
+      const val = bar.dataset.value;
+      showChartTooltip(evtLike, bar.dataset.label, [{
+        label: bar.dataset.series,
+        value: formatValue ? formatValue(val) : val,
+        color: bar.dataset.color
+      }]);
+    };
+    const hide = () => { bar.classList.remove('hover'); hideChartTooltip(); };
+    bar.addEventListener('pointerenter', show);
+    bar.addEventListener('pointermove', show);
+    bar.addEventListener('pointerleave', hide);
+    bar.addEventListener('focus', () => {
+      const r = bar.getBoundingClientRect();
+      show({ clientX: r.left + r.width/2, clientY: r.top });
+    });
+    bar.addEventListener('blur', hide);
+  });
+}
+function pecas(v) { return v + ' peça' + (v === '1' ? '' : 's'); }
+
+// ── GRÁFICO: ENTRADAS × VENDAS ───────────────────────────
+function renderChartFluxo(ents, sais, filtro) {
+  const container = document.getElementById('chart-fluxo');
+  const keys = getBucketKeys(filtro, ents, sais);
+  if (!keys.length) {
+    container.innerHTML = '<div class="empty" style="padding:28px 10px;"><div class="empty-icon">📊</div>Sem movimentações no período.</div>';
+    return;
+  }
+  const isMonth = filtro === 'tudo';
+  const entMap = {}, saiMap = {};
+  ents.forEach(e => { const k = isMonth ? e.data.slice(0,7) : e.data; entMap[k] = (entMap[k]||0) + Number(e.qtd); });
+  sais.forEach(s => { const k = isMonth ? s.data.slice(0,7) : s.data; saiMap[k] = (saiMap[k]||0) + Number(s.qtd); });
+
+  const data = keys.map(k => ({ label: bucketLabel(k, filtro), entrada: entMap[k]||0, venda: saiMap[k]||0 }));
+  const maxVal = Math.max(1, ...data.map(d => Math.max(d.entrada, d.venda)));
+  const step = niceStep(maxVal);
+  const axisMax = Math.ceil(maxVal / step) * step;
+
+  const barW = 16, barGap = 3, groupGap = 22;
+  const groupW = barW*2 + barGap;
+  const pitch = groupW + groupGap;
+  const marginLeft = 34, marginBottom = 26, marginTop = 10, marginRight = 10;
+  const plotH = 150;
+  const svgW = marginLeft + data.length*pitch + groupGap + marginRight;
+  const svgH = marginTop + plotH + marginBottom;
+  const gridSteps = 4;
+
+  let gridlines = '', yLabels = '';
+  for (let i = 0; i <= gridSteps; i++) {
+    const val = axisMax * i / gridSteps;
+    const y = marginTop + plotH - (val/axisMax)*plotH;
+    gridlines += `<line x1="${marginLeft}" y1="${y}" x2="${svgW-marginRight}" y2="${y}" stroke="var(--border)" stroke-width="1"></line>`;
+    yLabels += `<text x="${marginLeft-8}" y="${y+4}" text-anchor="end" font-size="10" fill="var(--muted)" font-family="var(--font-body)">${Math.round(val)}</text>`;
+  }
+
+  let bars = '', xLabels = '';
+  data.forEach((d, i) => {
+    const gx = marginLeft + groupGap + i*pitch;
+    const hE = (d.entrada/axisMax) * plotH;
+    const hV = (d.venda/axisMax) * plotH;
+    const yE = marginTop + plotH - hE;
+    const yV = marginTop + plotH - hV;
+    const lbl = esc(d.label);
+    bars += `<path class="chart-bar" tabindex="0" style="fill:var(--chart-entrada);" d="${roundedTopRectPath(gx, yE, barW, hE, 4)}" data-label="${lbl}" data-series="Entradas" data-value="${d.entrada}" data-color="var(--chart-entrada)"></path>`;
+    bars += `<path class="chart-bar" tabindex="0" style="fill:var(--chart-venda);" d="${roundedTopRectPath(gx+barW+barGap, yV, barW, hV, 4)}" data-label="${lbl}" data-series="Vendas" data-value="${d.venda}" data-color="var(--chart-venda)"></path>`;
+    xLabels += `<text x="${gx+groupW/2}" y="${marginTop+plotH+18}" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="var(--font-body)">${lbl}</text>`;
+  });
+
+  container.innerHTML = `<svg width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" role="img" aria-label="Entradas e vendas por período">${gridlines}${yLabels}${bars}${xLabels}</svg>`;
+  attachBarTooltips(container, pecas);
+}
+
+// ── GRÁFICO: TOP MODELOS VENDIDOS ────────────────────────
+function renderChartTopModelos(sais) {
+  const container = document.getElementById('chart-top-modelos');
+  const porModelo = {};
+  sais.forEach(s => { porModelo[s.modelo] = (porModelo[s.modelo]||0) + Number(s.qtd); });
+  const ranking = Object.entries(porModelo)
+    .map(([modelo, qtd]) => ({ modelo, qtd }))
+    .sort((a,b) => b.qtd - a.qtd)
+    .slice(0, 5);
+
+  if (!ranking.length) {
+    container.innerHTML = '<div class="empty" style="padding:28px 10px;"><div class="empty-icon">👕</div>Nenhuma venda no período.</div>';
+    return;
+  }
+  const maxQtd = ranking[0].qtd;
+  container.innerHTML = ranking.map(r => {
+    const pct = Math.max(4, Math.round((r.qtd/maxQtd)*100));
+    const nome = esc(r.modelo);
+    return `<div class="rank-row chart-bar" tabindex="0" data-label="${nome}" data-series="Vendidos" data-value="${r.qtd}" data-color="var(--chart-gold)">
+      <div class="rank-label" title="${nome}">${nome}</div>
+      <div class="rank-track"><div class="rank-fill" style="width:${pct}%;"></div></div>
+      <div class="rank-value">${r.qtd}</div>
+    </div>`;
+  }).join('');
+  attachBarTooltips(container, pecas);
 }
 
 // ── SUMMARIES ─────────────────────────────────────────────

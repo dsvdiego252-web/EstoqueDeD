@@ -45,22 +45,29 @@
   header {
     background: var(--surface);
     border-bottom: 2px solid var(--accent);
-    padding: 0 32px;
+    padding: 12px 32px;
+    padding-top: max(12px, env(safe-area-inset-top));
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 64px;
+    flex-wrap: wrap;
+    row-gap: 10px;
+    min-height: 64px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
   }
   .logo {
     font-family: var(--font-display);
     font-size: 28px;
     letter-spacing: 3px;
     color: var(--accent);
+    min-width: 0;
   }
   .logo span { color: var(--text); }
-  .logo img { height: 40px; width: auto; display: block; }
+  .logo img { height: 40px; width: auto; display: block; flex-shrink: 0; }
   #loading-overlay img { height: 88px; width: auto; }
-  .header-actions { display: flex; gap: 10px; align-items: center; }
+  .header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .btn-backup.install { background: var(--accent2); color: #0f0f0f; border-color: var(--accent2); }
   .btn-backup.install:hover { background: #6fdcd4; }
   .btn-backup {
@@ -87,6 +94,7 @@
     box-shadow: 0 8px 24px rgba(0,0,0,0.4);
     opacity: 0; transform: translateY(10px);
     transition: all 0.3s; pointer-events: none; z-index: 999;
+    max-width: calc(100vw - 32px);
   }
   .toast.show { opacity: 1; transform: translateY(0); }
   .toast.error { border-left-color: var(--danger); }
@@ -109,6 +117,7 @@
     padding: 20px 22px;
     position: relative;
     overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
   }
   .scard::before {
     content: '';
@@ -149,7 +158,11 @@
     display: flex;
     gap: 4px;
     padding: 24px 32px 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
   }
+  .tabs-bar::-webkit-scrollbar { display: none; }
   .tab-btn {
     font-family: var(--font-body);
     font-size: 14px;
@@ -163,6 +176,8 @@
     cursor: pointer;
     transition: all 0.2s;
     letter-spacing: 0.5px;
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
   .tab-btn:hover { color: var(--text); }
   .tab-btn.active {
@@ -243,6 +258,8 @@
     padding-top: 4px;
   }
   .divider { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table-scroll table { min-width: 720px; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   thead tr { border-bottom: 2px solid var(--border); }
   th {
@@ -283,6 +300,7 @@
     border-radius: 10px;
     padding: 20px;
     position: relative;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
   }
   .ecard-name {
     font-family: var(--font-display);
@@ -350,6 +368,7 @@
     border-radius: 8px;
     padding: 16px;
     text-align: center;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
   }
   .stat-box .lbl { font-size: 11px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; }
   .stat-box .val { font-family: var(--font-display); font-size: 30px; }
@@ -412,9 +431,24 @@
   .modal-backup-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 
   @media (max-width: 700px) {
-    .summary { grid-template-columns: repeat(2,1fr); }
-    header, .tabs-bar, .main { padding-left: 16px; padding-right: 16px; }
-    .main { margin-left: 16px; margin-right: 16px; }
+    .summary { grid-template-columns: repeat(2,1fr); gap: 12px; padding: 16px 16px 0; }
+    header, .tabs-bar { padding-left: 16px; padding-right: 16px; }
+    .main { margin-left: 16px; margin-right: 16px; padding: 18px 16px; }
+
+    header { padding: 10px 16px; padding-top: max(10px, env(safe-area-inset-top)); }
+    .logo { font-size: 19px; }
+    .logo img { height: 30px; }
+    .header-date { display: none; }
+    .header-actions { width: 100%; justify-content: flex-end; }
+    .btn-backup { padding: 8px 12px; font-size: 11px; }
+
+    .tabs-bar { padding-top: 16px; }
+    .tab-btn { padding: 9px 16px; font-size: 13px; }
+
+    .scard { padding: 16px; }
+    .scard-value { font-size: 28px; }
+
+    .toast { left: 16px; right: 16px; bottom: max(20px, calc(12px + env(safe-area-inset-bottom))); }
   }
 </style>
 </head>
@@ -584,6 +618,7 @@
 
     <hr class="divider">
     <div class="section-title">Histórico de Entradas</div>
+    <div class="table-scroll">
     <table id="tbl-entradas">
       <thead><tr>
         <th>Data</th><th>Modelo</th><th>Cor</th><th>Tamanho</th>
@@ -593,6 +628,7 @@
         <tr><td colspan="11" class="empty">Nenhuma entrada registrada.</td></tr>
       </tbody>
     </table>
+    </div>
   </div>
 
   <!-- ABA VENDAS -->
@@ -681,6 +717,7 @@
 
     <hr class="divider">
     <div class="section-title">Histórico de Vendas</div>
+    <div class="table-scroll">
     <table>
       <thead><tr>
         <th>Data</th><th>Peça</th><th>Estampa</th><th>Canal</th>
@@ -690,6 +727,7 @@
         <tr><td colspan="12" class="empty">Nenhuma venda registrada.</td></tr>
       </tbody>
     </table>
+    </div>
   </div>
 
   <!-- ABA CUSTOS -->
@@ -779,6 +817,7 @@
     </div>
 
     <div class="section-title">Movimentações</div>
+    <div class="table-scroll">
     <table>
       <thead><tr>
         <th>Data</th><th>Tipo</th><th>Modelo</th><th>Cor</th><th>Tam.</th><th>Qtd</th><th>Valor Unit.</th><th>Total</th>
@@ -787,6 +826,7 @@
         <tr><td colspan="8" class="empty">Nenhuma movimentação.</td></tr>
       </tbody>
     </table>
+    </div>
   </div>
 
 </div>

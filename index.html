@@ -1471,7 +1471,8 @@ function renderRelatorio() {
       const cor        = lucroTotal >= 0 ? 'var(--success)' : 'var(--danger)';
       lucroCell = `<span style="color:${cor};font-weight:600">${fmt(lucroTotal)}</span>`;
       pctCell   = `<span style="color:${cor};font-weight:600">${pct.toFixed(1)}%</span>`;
-      custoTotal = custoMedioPonderado(m.modelo, m.cor, m.tamanho) * m.qtd;
+      // custo total = receita - lucro líquido: já inclui camisa + DTF/embalagem/outros + taxas do canal
+      custoTotal = (receita - (m.lucroLiq || 0)) * m.qtd;
     } else {
       custoTotal = (m.custo||0) * m.qtd + (m.frete||0);
     }

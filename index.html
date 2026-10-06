@@ -435,7 +435,7 @@
     transform: translateY(4px);
     transition: opacity 0.12s, transform 0.12s;
     z-index: 1000;
-    max-width: 220px;
+    max-width: 240px;
   }
   .chart-tooltip.show { opacity: 1; transform: translateY(0); }
   .chart-tooltip .ctt-label { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
@@ -644,6 +644,7 @@
   <button class="tab-btn" data-tab="entradas">⬆️ Entradas</button>
   <button class="tab-btn" data-tab="saidas">⬇️ Vendas</button>
   <button class="tab-btn" data-tab="custos">💰 Custos</button>
+  <button class="tab-btn" data-tab="investimento">📢 Investimento</button>
   <button class="tab-btn" data-tab="relatorio">📊 Relatório</button>
 </div>
 
@@ -880,6 +881,62 @@
     </div>
   </div>
 
+  <!-- ABA INVESTIMENTO -->
+  <div class="tab-content" id="tab-investimento">
+    <div class="section-title">Registrar Investimento em Anúncios</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px;">Instagram Ads, Facebook Ads, Google Ads, influenciadores e outras divulgações pagas.</p>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Canal</label>
+        <select id="inv-canal">
+          <option value="">Selecione</option>
+          <option>Instagram Ads</option>
+          <option>Facebook Ads</option>
+          <option>Google Ads</option>
+          <option>TikTok Ads</option>
+          <option>Influenciador</option>
+          <option>Outro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Descrição</label>
+        <input type="text" id="inv-descricao" placeholder="Ex: Campanha Dia das Mães">
+      </div>
+      <div class="form-group">
+        <label>Valor Investido (R$)</label>
+        <input type="number" id="inv-valor" placeholder="0,00" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Data</label>
+        <input type="date" id="inv-data">
+      </div>
+      <div class="form-group">
+        <label>Observação</label>
+        <input type="text" id="inv-obs" placeholder="Opcional">
+      </div>
+    </div>
+    <button class="btn btn-primary" id="btn-add-investimento">+ Registrar Investimento</button>
+
+    <hr class="divider">
+    <div class="section-title">Histórico de Investimentos</div>
+    <div class="stat-row" style="grid-template-columns:1fr;max-width:280px;margin-bottom:20px;">
+      <div class="stat-box">
+        <div class="lbl">Total Investido</div>
+        <div class="val" id="inv-total" style="color:var(--accent)">R$ 0,00</div>
+      </div>
+    </div>
+    <div class="table-scroll">
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Canal</th><th>Descrição</th><th>Valor</th><th>Obs.</th><th></th>
+      </tr></thead>
+      <tbody id="tbody-investimentos">
+        <tr><td colspan="6" class="empty">Nenhum investimento registrado.</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
   <!-- ABA RELATÓRIO -->
   <div class="tab-content" id="tab-relatorio">
     <div class="report-header">
@@ -1082,12 +1139,13 @@ window.addEventListener('appinstalled', () => {
 let entradas = [];
 let saidas   = [];
 let custos   = {"dtf":0,"embalagem":0,"outros":0,"outrosDesc":""};
+let investimentos = [];
 let _carregado = false;
 
 // ── SALVAR NA NUVEM ───────────────────────────────────────
 async function salvar() {
   try {
-    await setDoc(DOC_REF, { entradas, saidas, custos, atualizado: new Date().toISOString() });
+    await setDoc(DOC_REF, { entradas, saidas, custos, investimentos, atualizado: new Date().toISOString() });
   } catch(e) {
     console.error("Erro ao salvar:", e);
     showToast("⚠️ Erro ao salvar na nuvem.", true);
@@ -1103,6 +1161,7 @@ function iniciarSync() {
       entradas = d.entradas || [];
       saidas   = d.saidas   || [];
       custos   = d.custos   || {"dtf":0,"embalagem":0,"outros":0,"outrosDesc":""};
+      investimentos = d.investimentos || [];
     }
     if (!_carregado) {
       _carregado = true;
@@ -1120,6 +1179,7 @@ function iniciarSync() {
     entradas = JSON.parse(localStorage.getItem('est_entradas') || '[]');
     saidas   = JSON.parse(localStorage.getItem('est_saidas')   || '[]');
     custos   = JSON.parse(localStorage.getItem('est_custos')   || '{"dtf":0,"embalagem":0,"outros":0,"outrosDesc":""}');
+    investimentos = JSON.parse(localStorage.getItem('est_investimentos') || '[]');
     renderAll();
     renderCustos();
   });
@@ -1149,6 +1209,7 @@ function custoMedioPonderado(modelo, cor, tamanho) {
 document.getElementById('hDate').textContent = new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 document.getElementById('ent-data').value = hoje();
 document.getElementById('sai-data').value = hoje();
+document.getElementById('inv-data').value = hoje();
 
 // ── ESTOQUE CALC ─────────────────────────────────────────
 function calcEstoque() {
@@ -1254,6 +1315,25 @@ function renderEntradas() {
       <td>${fmt(e.custo*e.qtd+frete)}</td>
       <td style="color:var(--muted);font-size:12px">${esc(e.obs)||'—'}</td>
       <td><button class="btn btn-danger btn-sm" onclick="delEntrada(${idx})">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── RENDER TABELA INVESTIMENTOS ───────────────────────────
+function renderInvestimentos() {
+  const tb = document.getElementById('tbody-investimentos');
+  const total = investimentos.reduce((a,i)=>a+Number(i.valor||0),0);
+  document.getElementById('inv-total').textContent = fmt(total);
+  if(!investimentos.length){ tb.innerHTML='<tr><td colspan="6" class="empty">Nenhum investimento registrado.</td></tr>'; return; }
+  tb.innerHTML = [...investimentos].reverse().map((inv,i)=>{
+    const idx = investimentos.length-1-i;
+    return `<tr>
+      <td>${fmtData(inv.data)}</td>
+      <td>${esc(inv.canal)||'—'}</td>
+      <td>${esc(inv.descricao)||'—'}</td>
+      <td>${fmt(inv.valor)}</td>
+      <td style="color:var(--muted);font-size:12px">${esc(inv.obs)||'—'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="delInvestimento(${idx})">✕</button></td>
     </tr>`;
   }).join('');
 }
@@ -1462,6 +1542,7 @@ function showChartTooltip(evtLike, header, rows) {
     const value = document.createElement('span');
     value.className = 'ctt-value';
     value.textContent = r.value;
+    if (r.valueColor) value.style.color = r.valueColor;
     row.appendChild(value);
     tip.appendChild(row);
   });
@@ -1494,6 +1575,32 @@ function attachBarTooltips(container, formatValue) {
   });
 }
 function pecas(v) { return v + ' peça' + (v === '1' ? '' : 's'); }
+
+// tooltip dos rankings: peças + valor vendido + lucro líquido do grupo
+function attachRankTooltips(container) {
+  container.querySelectorAll('.rank-row').forEach(row => {
+    const show = (evtLike) => {
+      row.classList.add('hover');
+      const qtd   = row.dataset.qtd;
+      const valor = parseFloat(row.dataset.valor);
+      const lucro = parseFloat(row.dataset.lucro);
+      showChartTooltip(evtLike, row.dataset.label, [
+        { label: 'Peças vendidas', value: pecas(qtd) },
+        { label: 'Valor vendido',  value: fmt(valor) },
+        { label: 'Lucro líquido',  value: fmt(lucro), valueColor: lucro>=0 ? 'var(--success)' : 'var(--danger)' }
+      ]);
+    };
+    const hide = () => { row.classList.remove('hover'); hideChartTooltip(); };
+    row.addEventListener('pointerenter', show);
+    row.addEventListener('pointermove', show);
+    row.addEventListener('pointerleave', hide);
+    row.addEventListener('focus', () => {
+      const r = row.getBoundingClientRect();
+      show({ clientX: r.left + r.width/2, clientY: r.top });
+    });
+    row.addEventListener('blur', hide);
+  });
+}
 
 // ── GRÁFICO: ENTRADAS × VENDAS ───────────────────────────
 function renderChartFluxo(ents, sais, filtro) {
@@ -1553,14 +1660,18 @@ function renderChartFluxo(ents, sais, filtro) {
 function renderRankingChart(containerId, sais, campo, opts) {
   opts = opts || {};
   const container = document.getElementById(containerId);
-  const contagem = {};
+  const grupos = {};
   sais.forEach(s => {
-    const valor = (s[campo] || '').toString().trim();
-    const chave = valor || opts.vazioRotulo || '—';
-    contagem[chave] = (contagem[chave]||0) + Number(s.qtd);
+    const valorCampo = (s[campo] || '').toString().trim();
+    const chave = valorCampo || opts.vazioRotulo || '—';
+    if (!grupos[chave]) grupos[chave] = { qtd: 0, valor: 0, lucro: 0 };
+    const desconto = s.desconto || 0;
+    grupos[chave].qtd   += Number(s.qtd);
+    grupos[chave].valor += (s.preco - desconto) * s.qtd;
+    grupos[chave].lucro += (s.lucroLiq || 0) * s.qtd;
   });
-  const ranking = Object.entries(contagem)
-    .map(([nome, qtd]) => ({ nome, qtd }))
+  const ranking = Object.entries(grupos)
+    .map(([nome, g]) => ({ nome, ...g }))
     .sort((a,b) => b.qtd - a.qtd)
     .slice(0, 5);
 
@@ -1572,13 +1683,13 @@ function renderRankingChart(containerId, sais, campo, opts) {
   container.innerHTML = ranking.map(r => {
     const pct = Math.max(4, Math.round((r.qtd/maxQtd)*100));
     const nome = esc(r.nome);
-    return `<div class="rank-row chart-bar" tabindex="0" data-label="${nome}" data-series="Vendidos" data-value="${r.qtd}" data-color="var(--chart-gold)">
+    return `<div class="rank-row" tabindex="0" data-label="${nome}" data-qtd="${r.qtd}" data-valor="${r.valor.toFixed(2)}" data-lucro="${r.lucro.toFixed(2)}">
       <div class="rank-label" title="${nome}">${nome}</div>
       <div class="rank-track"><div class="rank-fill" style="width:${pct}%;"></div></div>
       <div class="rank-value">${r.qtd}</div>
     </div>`;
   }).join('');
-  attachBarTooltips(container, pecas);
+  attachRankTooltips(container);
 }
 
 // ── SUMMARIES ─────────────────────────────────────────────
@@ -1739,6 +1850,27 @@ document.getElementById('btn-add-entrada').addEventListener('click',()=>{
   document.getElementById('ent-data').value=hoje();
 });
 
+// ── ADD INVESTIMENTO ──────────────────────────────────────
+document.getElementById('btn-add-investimento').addEventListener('click',()=>{
+  const canal      = document.getElementById('inv-canal').value;
+  const descricao  = document.getElementById('inv-descricao').value.trim();
+  const valor      = parseFloat(document.getElementById('inv-valor').value)||0;
+  const data       = document.getElementById('inv-data').value;
+  const obs        = document.getElementById('inv-obs').value.trim();
+  if(!canal||!valor||valor<=0||!data){
+    alert('Preencha: Canal, Valor Investido e Data.');
+    return;
+  }
+  investimentos.push({canal,descricao,valor,data,obs});
+  salvar();
+  renderAll();
+  document.getElementById('inv-canal').value='';
+  document.getElementById('inv-descricao').value='';
+  document.getElementById('inv-valor').value='';
+  document.getElementById('inv-obs').value='';
+  document.getElementById('inv-data').value=hoje();
+});
+
 // ── ADD SAIDA ─────────────────────────────────────────────
 document.getElementById('btn-add-saida').addEventListener('click',()=>{
   const pecaKey = document.getElementById('sai-peca').value;
@@ -1783,6 +1915,10 @@ document.getElementById('btn-add-saida').addEventListener('click',()=>{
 window.delEntrada = function(i) {
   if(!confirm('Remover esta entrada?')) return;
   entradas.splice(i,1); salvar(); renderAll();
+};
+window.delInvestimento = function(i) {
+  if(!confirm('Remover este investimento?')) return;
+  investimentos.splice(i,1); salvar(); renderAll();
 };
 window.delSaida = function(i) {
   if(!confirm('Remover esta venda?')) return;
@@ -1926,6 +2062,7 @@ function renderAll() {
   renderEstoque(document.getElementById('busca-estoque').value);
   renderEntradas();
   renderSaidas();
+  renderInvestimentos();
   renderSummary();
   atualizarSelectVendas();
   if(document.getElementById('tab-relatorio').classList.contains('active')) renderRelatorio();
@@ -1977,7 +2114,7 @@ document.getElementById('btn-salvar-custos').addEventListener('click',()=>{
 
 // ── HELPERS MODAL BACKUP ─────────────────────────────────
 function abrirModalSalvar() {
-  const dados = { entradas, saidas, custos, salvo_em: new Date().toISOString() };
+  const dados = { entradas, saidas, custos, investimentos, salvo_em: new Date().toISOString() };
   document.getElementById('backup-textarea').value = JSON.stringify(dados, null, 2);
   document.getElementById('modo-salvar').style.display    = 'block';
   document.getElementById('modo-restaurar').style.display = 'none';
@@ -2062,6 +2199,7 @@ document.getElementById('btn-confirmar-restaurar').addEventListener('click', () 
     entradas = dados.entradas;
     saidas   = dados.saidas;
     if (dados.custos) custos = dados.custos;
+    investimentos = Array.isArray(dados.investimentos) ? dados.investimentos : [];
     salvar();
     renderAll();
     renderCustos();
@@ -2085,6 +2223,7 @@ document.getElementById('input-importar').addEventListener('change', function() 
       entradas = dados.entradas;
       saidas   = dados.saidas;
       if (dados.custos) custos = dados.custos;
+      investimentos = Array.isArray(dados.investimentos) ? dados.investimentos : [];
       salvar(); renderAll(); renderCustos();
       fecharModalBackup();
       showToast('✅ Backup carregado com sucesso!');

@@ -424,6 +424,12 @@
   path.chart-bar:hover, path.chart-bar.hover { opacity: 0.8; }
   .rank-row.hover, .rank-row:hover { background: rgba(255,255,255,0.03); }
   .rank-row.hover .rank-fill, .rank-row:hover .rank-fill { filter: brightness(1.12); }
+  .custo-cell {
+    cursor: pointer;
+    border-bottom: 1px dotted var(--muted);
+    outline: none;
+  }
+  .custo-cell.hover, .custo-cell:focus-visible { color: var(--accent); border-color: var(--accent); }
   .chart-tooltip {
     position: fixed;
     pointer-events: none;
@@ -1463,19 +1469,25 @@ function renderRelatorio() {
   tb.innerHTML = movs.map(m=>{
     let lucroCell = '<span style="color:var(--muted)">—</span>';
     let pctCell   = '<span style="color:var(--muted)">—</span>';
-    let custoTotal;
+    let custoCell;
     if (m.tipo === 'Venda') {
-      const desconto   = m.desconto || 0;
-      const receita    = m.valor - desconto;
-      const lucroTotal = (m.lucroLiq || 0) * m.qtd;
-      const pct        = receita > 0 ? ((m.lucroLiq || 0) / receita * 100) : 0;
-      const cor        = lucroTotal >= 0 ? 'var(--success)' : 'var(--danger)';
+      const desconto     = m.desconto || 0;
+      const receita      = m.valor - desconto;
+      const lucroTotal   = (m.lucroLiq || 0) * m.qtd;
+      const pct          = receita > 0 ? ((m.lucroLiq || 0) / receita * 100) : 0;
+      const cor          = lucroTotal >= 0 ? 'var(--success)' : 'var(--danger)';
       lucroCell = `<span style="color:${cor};font-weight:600">${fmt(lucroTotal)}</span>`;
       pctCell   = `<span style="color:${cor};font-weight:600">${pct.toFixed(1)}%</span>`;
-      // custo total = receita - lucro líquido: já inclui camisa + DTF/embalagem/outros + taxas do canal
-      custoTotal = (receita - (m.lucroLiq || 0)) * m.qtd;
+
+      // composição do custo (por peça) — a mesma conta usada no lucro líquido
+      const custoCamisa  = custoMedioPonderado(m.modelo, m.cor, m.tamanho);
+      const custosExtras = (custos.dtf||0) + (custos.embalagem||0) + (custos.outros||0);
+      let taxaCanal = 0;
+      if (m.canal === 'Shopee') taxaCanal = receita * 0.20 + 4;
+      const custoTotal = (custoCamisa + custosExtras + taxaCanal) * m.qtd;
+      custoCell = `<span class="custo-cell" tabindex="0" data-custo-camisa="${(custoCamisa*m.qtd).toFixed(2)}" data-custo-extras="${(custosExtras*m.qtd).toFixed(2)}" data-custo-taxa="${(taxaCanal*m.qtd).toFixed(2)}">${fmt(custoTotal)}</span>`;
     } else {
-      custoTotal = (m.custo||0) * m.qtd + (m.frete||0);
+      custoCell = fmt((m.custo||0) * m.qtd + (m.frete||0));
     }
     return `<tr>
     <td>${fmtData(m.data)}</td>
@@ -1483,10 +1495,11 @@ function renderRelatorio() {
     <td>${esc(m.modelo)}</td><td>${esc(m.cor)}</td><td>${esc(m.tamanho)}</td>
     <td>${m.tipo==='Venda'?(esc(m.canal)||'—'):'—'}</td>
     <td>${m.qtd}</td><td>${fmt(m.valor)}</td><td>${fmt(m.valor*m.qtd)}</td>
-    <td>${fmt(custoTotal)}</td>
+    <td>${custoCell}</td>
     <td>${lucroCell}</td><td>${pctCell}</td>
   </tr>`;
   }).join('');
+  attachCustoTooltips(tb);
 }
 
 // ── GRÁFICOS DO RELATÓRIO ────────────────────────────────
@@ -1685,6 +1698,33 @@ function aplicarFiltroRank(campo, valor, label) {
 function limparFiltroRank() {
   rankFiltro = null;
   renderRelatorio();
+}
+
+// tooltip com a composição do custo (camisa + DTF/embalagem/outros + taxa do canal)
+function attachCustoTooltips(container) {
+  container.querySelectorAll('.custo-cell').forEach(el => {
+    const show = (evtLike) => {
+      el.classList.add('hover');
+      const camisa = parseFloat(el.dataset.custoCamisa);
+      const extras = parseFloat(el.dataset.custoExtras);
+      const taxa   = parseFloat(el.dataset.custoTaxa);
+      const rows = [
+        { label: 'Custo do produto', value: fmt(camisa) },
+        { label: 'DTF/embalagem/outros', value: fmt(extras) },
+      ];
+      if (taxa > 0) rows.push({ label: 'Taxa do canal', value: fmt(taxa) });
+      showChartTooltip(evtLike, 'Composição do custo', rows);
+    };
+    const hide = () => { el.classList.remove('hover'); hideChartTooltip(); };
+    el.addEventListener('pointerenter', show);
+    el.addEventListener('pointermove', show);
+    el.addEventListener('pointerleave', hide);
+    el.addEventListener('focus', () => {
+      const r = el.getBoundingClientRect();
+      show({ clientX: r.left + r.width/2, clientY: r.top });
+    });
+    el.addEventListener('blur', hide);
+  });
 }
 
 // ── GRÁFICO: ENTRADAS × VENDAS ───────────────────────────

@@ -1051,10 +1051,10 @@
     <div class="table-scroll">
     <table>
       <thead><tr>
-        <th>Data</th><th>Tipo</th><th>Modelo</th><th>Cor</th><th>Tam.</th><th>Qtd</th><th>Valor Unit.</th><th>Total</th><th>Lucro Líq.</th><th>%</th>
+        <th>Data</th><th>Tipo</th><th>Modelo</th><th>Cor</th><th>Tam.</th><th>Qtd</th><th>Valor Unit.</th><th>Total</th><th>Custo</th><th>Lucro Líq.</th><th>%</th>
       </tr></thead>
       <tbody id="tbody-relatorio">
-        <tr><td colspan="10" class="empty">Nenhuma movimentação.</td></tr>
+        <tr><td colspan="11" class="empty">Nenhuma movimentação.</td></tr>
       </tbody>
     </table>
     </div>
@@ -1448,7 +1448,8 @@ function renderRelatorio() {
 
   const chip = document.getElementById('rank-filtro-chip');
   if (rankFiltro) {
-    movs = movs.filter(m => rankFiltro.campo in m && (m[rankFiltro.campo]||'').toString().trim() === rankFiltro.valor);
+    // rankings TOP são sempre baseados em vendas, então o filtro só deve trazer vendas
+    movs = movs.filter(m => m.tipo === 'Venda' && (m[rankFiltro.campo]||'').toString().trim() === rankFiltro.valor);
     chip.style.display = '';
     chip.innerHTML = `${esc(CAMPO_LABEL[rankFiltro.campo]||rankFiltro.campo)}: <strong>${esc(rankFiltro.label)}</strong> <button type="button" aria-label="Remover filtro" onclick="limparFiltroRank()">✕</button>`;
   } else {
@@ -1457,10 +1458,11 @@ function renderRelatorio() {
   }
 
   const tb = document.getElementById('tbody-relatorio');
-  if(!movs.length){ tb.innerHTML=`<tr><td colspan="10" class="empty">Nenhuma movimentação${rankFiltro?' para este filtro':' no período'}.</td></tr>`; return; }
+  if(!movs.length){ tb.innerHTML=`<tr><td colspan="11" class="empty">Nenhuma movimentação${rankFiltro?' para este filtro':' no período'}.</td></tr>`; return; }
   tb.innerHTML = movs.map(m=>{
     let lucroCell = '<span style="color:var(--muted)">—</span>';
     let pctCell   = '<span style="color:var(--muted)">—</span>';
+    let custoTotal;
     if (m.tipo === 'Venda') {
       const desconto   = m.desconto || 0;
       const receita    = m.valor - desconto;
@@ -1469,12 +1471,16 @@ function renderRelatorio() {
       const cor        = lucroTotal >= 0 ? 'var(--success)' : 'var(--danger)';
       lucroCell = `<span style="color:${cor};font-weight:600">${fmt(lucroTotal)}</span>`;
       pctCell   = `<span style="color:${cor};font-weight:600">${pct.toFixed(1)}%</span>`;
+      custoTotal = custoMedioPonderado(m.modelo, m.cor, m.tamanho) * m.qtd;
+    } else {
+      custoTotal = (m.custo||0) * m.qtd + (m.frete||0);
     }
     return `<tr>
     <td>${fmtData(m.data)}</td>
     <td><span class="badge ${m.tipo==='Entrada'?'badge-entrada':'badge-saida'}">${m.tipo}</span></td>
     <td>${esc(m.modelo)}</td><td>${esc(m.cor)}</td><td>${esc(m.tamanho)}</td>
     <td>${m.qtd}</td><td>${fmt(m.valor)}</td><td>${fmt(m.valor*m.qtd)}</td>
+    <td>${fmt(custoTotal)}</td>
     <td>${lucroCell}</td><td>${pctCell}</td>
   </tr>`;
   }).join('');

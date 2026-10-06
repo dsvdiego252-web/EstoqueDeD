@@ -265,6 +265,7 @@
   .divider { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
   .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .table-scroll table { min-width: 720px; }
+  #tab-relatorio .table-scroll table { min-width: 860px; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   thead tr { border-bottom: 2px solid var(--border); }
   th {
@@ -1051,10 +1052,10 @@
     <div class="table-scroll">
     <table>
       <thead><tr>
-        <th>Data</th><th>Tipo</th><th>Modelo</th><th>Cor</th><th>Tam.</th><th>Qtd</th><th>Valor Unit.</th><th>Total</th><th>Custo</th><th>Lucro Líq.</th><th>%</th>
+        <th>Data</th><th>Tipo</th><th>Modelo</th><th>Cor</th><th>Tam.</th><th>Canal</th><th>Qtd</th><th>Valor Unit.</th><th>Total</th><th>Custo</th><th>Lucro Líq.</th><th>%</th>
       </tr></thead>
       <tbody id="tbody-relatorio">
-        <tr><td colspan="11" class="empty">Nenhuma movimentação.</td></tr>
+        <tr><td colspan="12" class="empty">Nenhuma movimentação.</td></tr>
       </tbody>
     </table>
     </div>
@@ -1458,7 +1459,7 @@ function renderRelatorio() {
   }
 
   const tb = document.getElementById('tbody-relatorio');
-  if(!movs.length){ tb.innerHTML=`<tr><td colspan="11" class="empty">Nenhuma movimentação${rankFiltro?' para este filtro':' no período'}.</td></tr>`; return; }
+  if(!movs.length){ tb.innerHTML=`<tr><td colspan="12" class="empty">Nenhuma movimentação${rankFiltro?' para este filtro':' no período'}.</td></tr>`; return; }
   tb.innerHTML = movs.map(m=>{
     let lucroCell = '<span style="color:var(--muted)">—</span>';
     let pctCell   = '<span style="color:var(--muted)">—</span>';
@@ -1480,6 +1481,7 @@ function renderRelatorio() {
     <td>${fmtData(m.data)}</td>
     <td><span class="badge ${m.tipo==='Entrada'?'badge-entrada':'badge-saida'}">${m.tipo}</span></td>
     <td>${esc(m.modelo)}</td><td>${esc(m.cor)}</td><td>${esc(m.tamanho)}</td>
+    <td>${m.tipo==='Venda'?(esc(m.canal)||'—'):'—'}</td>
     <td>${m.qtd}</td><td>${fmt(m.valor)}</td><td>${fmt(m.valor*m.qtd)}</td>
     <td>${fmt(custoTotal)}</td>
     <td>${lucroCell}</td><td>${pctCell}</td>

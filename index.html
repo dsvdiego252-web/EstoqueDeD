@@ -454,6 +454,9 @@
   }
   .rank-row:hover, .rank-row:focus-visible { background: rgba(255,255,255,0.03); outline: none; }
   .rank-row + .rank-row { margin-top: 2px; }
+  .rank-row.active { background: rgba(232,197,71,0.1); }
+  .rank-row.active .rank-fill { background: var(--accent); filter: brightness(1.1); }
+  .rank-row.active .rank-label { color: var(--accent); font-weight: 700; }
   .rank-label {
     width: 38%;
     max-width: 160px;
@@ -474,6 +477,31 @@
     font-size: 16px;
     color: var(--accent);
   }
+
+  .rank-filtro-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(232,197,71,0.12);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 6px 5px 12px;
+    border-radius: 999px;
+  }
+  .rank-filtro-chip button {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 3px 7px;
+    border-radius: 50%;
+  }
+  .rank-filtro-chip button:hover { background: rgba(255,255,255,0.15); }
 
   .empty {
     text-align: center;
@@ -1016,7 +1044,10 @@
       </div>
     </div>
 
-    <div class="section-title">Movimentações</div>
+    <div class="section-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      Movimentações
+      <span id="rank-filtro-chip" class="rank-filtro-chip" style="display:none;"></span>
+    </div>
     <div class="table-scroll">
     <table>
       <thead><tr>
@@ -1141,6 +1172,7 @@ let saidas   = [];
 let custos   = {"dtf":0,"embalagem":0,"outros":0,"outrosDesc":""};
 let investimentos = [];
 let _carregado = false;
+let rankFiltro = null; // { campo: 'modelo'|'estampa'|'cor'|'tamanho', valor: string } — filtro ativo ao clicar num ranking TOP
 
 // ── SALVAR NA NUVEM ───────────────────────────────────────
 async function salvar() {
@@ -1409,13 +1441,23 @@ function renderRelatorio() {
   renderRankingChart('chart-top-cores', sais, 'cor', { icon:'🎨' });
   renderRankingChart('chart-top-tamanhos', sais, 'tamanho', { icon:'📏' });
 
-  const movs = [
+  let movs = [
     ...ents.map(e=>({...e,tipo:'Entrada',valor:e.custo})),
     ...sais.map(s=>({...s,tipo:'Venda',valor:s.preco}))
   ].sort((a,b)=>b.data.localeCompare(a.data));
 
+  const chip = document.getElementById('rank-filtro-chip');
+  if (rankFiltro) {
+    movs = movs.filter(m => rankFiltro.campo in m && (m[rankFiltro.campo]||'').toString().trim() === rankFiltro.valor);
+    chip.style.display = '';
+    chip.innerHTML = `${esc(CAMPO_LABEL[rankFiltro.campo]||rankFiltro.campo)}: <strong>${esc(rankFiltro.label)}</strong> <button type="button" aria-label="Remover filtro" onclick="limparFiltroRank()">✕</button>`;
+  } else {
+    chip.style.display = 'none';
+    chip.innerHTML = '';
+  }
+
   const tb = document.getElementById('tbody-relatorio');
-  if(!movs.length){ tb.innerHTML='<tr><td colspan="8" class="empty">Nenhuma movimentação no período.</td></tr>'; return; }
+  if(!movs.length){ tb.innerHTML=`<tr><td colspan="8" class="empty">Nenhuma movimentação${rankFiltro?' para este filtro':' no período'}.</td></tr>`; return; }
   tb.innerHTML = movs.map(m=>`<tr>
     <td>${fmtData(m.data)}</td>
     <td><span class="badge ${m.tipo==='Entrada'?'badge-entrada':'badge-saida'}">${m.tipo}</span></td>
@@ -1599,7 +1641,27 @@ function attachRankTooltips(container) {
       show({ clientX: r.left + r.width/2, clientY: r.top });
     });
     row.addEventListener('blur', hide);
+    const toggle = () => aplicarFiltroRank(row.dataset.campo, row.dataset.filtroValor, row.dataset.label);
+    row.addEventListener('click', toggle);
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
   });
+}
+
+// clica num item do ranking TOP → filtra a tabela de Movimentações por ele (clicar de novo remove o filtro)
+const CAMPO_LABEL = { modelo: 'Modelo', estampa: 'Estampa', cor: 'Cor', tamanho: 'Tamanho' };
+function aplicarFiltroRank(campo, valor, label) {
+  if (rankFiltro && rankFiltro.campo === campo && rankFiltro.valor === valor) {
+    rankFiltro = null;
+  } else {
+    rankFiltro = { campo, valor, label };
+  }
+  renderRelatorio();
+}
+function limparFiltroRank() {
+  rankFiltro = null;
+  renderRelatorio();
 }
 
 // ── GRÁFICO: ENTRADAS × VENDAS ───────────────────────────
@@ -1664,7 +1726,7 @@ function renderRankingChart(containerId, sais, campo, opts) {
   sais.forEach(s => {
     const valorCampo = (s[campo] || '').toString().trim();
     const chave = valorCampo || opts.vazioRotulo || '—';
-    if (!grupos[chave]) grupos[chave] = { qtd: 0, valor: 0, lucro: 0 };
+    if (!grupos[chave]) grupos[chave] = { qtd: 0, valor: 0, lucro: 0, bruto: valorCampo };
     const desconto = s.desconto || 0;
     grupos[chave].qtd   += Number(s.qtd);
     grupos[chave].valor += (s.preco - desconto) * s.qtd;
@@ -1683,7 +1745,8 @@ function renderRankingChart(containerId, sais, campo, opts) {
   container.innerHTML = ranking.map(r => {
     const pct = Math.max(4, Math.round((r.qtd/maxQtd)*100));
     const nome = esc(r.nome);
-    return `<div class="rank-row" tabindex="0" data-label="${nome}" data-qtd="${r.qtd}" data-valor="${r.valor.toFixed(2)}" data-lucro="${r.lucro.toFixed(2)}">
+    const ativo = rankFiltro && rankFiltro.campo === campo && rankFiltro.valor === r.bruto;
+    return `<div class="rank-row${ativo?' active':''}" tabindex="0" data-label="${nome}" data-qtd="${r.qtd}" data-valor="${r.valor.toFixed(2)}" data-lucro="${r.lucro.toFixed(2)}" data-campo="${campo}" data-filtro-valor="${esc(r.bruto)}">
       <div class="rank-label" title="${nome}">${nome}</div>
       <div class="rank-track"><div class="rank-fill" style="width:${pct}%;"></div></div>
       <div class="rank-value">${r.qtd}</div>

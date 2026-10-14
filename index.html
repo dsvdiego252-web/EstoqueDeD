@@ -714,6 +714,7 @@
       </select>
       <button class="btn btn-sm filtro-toggle" id="btn-filtro-com-estoque">📦 Só com estoque</button>
       <button class="btn btn-primary btn-sm" id="btn-abrir-ajuste">⚖️ Ajustar Estoque</button>
+      <button class="btn btn-sm" id="btn-renomear-cor" style="background:var(--card);color:var(--text);border:1px solid var(--border);">✏️ Renomear Cor</button>
     </div>
     <div class="estoque-grid" id="estoque-grid">
       <div class="empty"><div class="empty-icon">👕</div>Nenhum produto ainda.<br>Registre uma entrada para começar.</div>
@@ -1187,6 +1188,27 @@
     <div style="display:flex;gap:12px;margin-top:8px;">
       <button class="btn btn-primary" id="btn-salvar-ajuste">💾 Salvar Ajuste</button>
       <button class="btn" style="background:var(--card);color:var(--text);border:1px solid var(--border);" onclick="fecharModalAjuste()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-renomear-cor" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:28px;width:min(440px,95vw);max-height:90vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div style="font-family:var(--font-display);font-size:22px;letter-spacing:2px;color:var(--accent);">✏️ RENOMEAR COR</div>
+      <button onclick="fecharModalRenomearCor()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;">✕</button>
+    </div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:16px;">
+      Renomeando <strong id="renomear-cor-atual" style="color:var(--accent);"></strong>
+      <span id="renomear-cor-escopo"></span> — corrige entradas, vendas e ajustes já registrados.
+    </div>
+    <div class="form-group">
+      <label>Nome correto</label>
+      <input type="text" id="renomear-cor-novo" placeholder="Ex: Preta">
+    </div>
+    <div style="display:flex;gap:12px;margin-top:16px;">
+      <button class="btn btn-primary" id="btn-confirmar-renomear-cor">💾 Renomear</button>
+      <button class="btn" style="background:var(--card);color:var(--text);border:1px solid var(--border);" onclick="fecharModalRenomearCor()">Cancelar</button>
     </div>
   </div>
 </div>
@@ -2049,6 +2071,23 @@ function fecharModalAjuste() {
   document.getElementById('modal-ajuste').style.display = 'none';
 }
 
+// ── RENOMEAR COR ───────────────────────────────────────────
+// corrige nomes de cor digitados errado (ex: "Catamelo" → "Caramelo") em
+// entradas, vendas e ajustes já registrados — usa o Modelo/Cor filtrados
+// na aba Estoque pra saber o que renomear
+function abrirModalRenomearCor() {
+  const cor = document.getElementById('filtro-cor-estoque').value;
+  if (!cor) { alert('Selecione uma cor na aba Estoque antes de renomear.'); return; }
+  const modelo = document.getElementById('filtro-modelo-estoque').value;
+  document.getElementById('renomear-cor-atual').textContent = cor;
+  document.getElementById('renomear-cor-escopo').textContent = modelo ? `(só no modelo "${modelo}")` : '(em todos os modelos)';
+  document.getElementById('renomear-cor-novo').value = '';
+  document.getElementById('modal-renomear-cor').style.display = 'flex';
+}
+function fecharModalRenomearCor() {
+  document.getElementById('modal-renomear-cor').style.display = 'none';
+}
+
 // ── CALCULAR LUCRO LÍQUIDO (prévia) ──────────────────────
 function calcularLucroLiq() {
   const pecaKey = document.getElementById('sai-peca').value;
@@ -2185,6 +2224,27 @@ document.getElementById('btn-salvar-ajuste').addEventListener('click', () => {
   renderAll();
   fecharModalAjuste();
   showToast('✅ Estoque ajustado!');
+});
+
+document.getElementById('btn-renomear-cor').addEventListener('click', abrirModalRenomearCor);
+document.getElementById('btn-confirmar-renomear-cor').addEventListener('click', () => {
+  const corAtual = document.getElementById('filtro-cor-estoque').value;
+  const modelo   = document.getElementById('filtro-modelo-estoque').value;
+  const novoNome = document.getElementById('renomear-cor-novo').value.trim();
+  if (!corAtual || !novoNome) { alert('Digite o nome correto da cor.'); return; }
+  if (novoNome === corAtual) { fecharModalRenomearCor(); return; }
+
+  const bate = (item) => item.cor === corAtual && (!modelo || item.modelo === modelo);
+  let count = 0;
+  entradas.forEach(e => { if (bate(e)) { e.cor = novoNome; count++; } });
+  saidas.forEach(s => { if (bate(s)) { s.cor = novoNome; count++; } });
+  ajustes.forEach(a => { if (bate(a)) { a.cor = novoNome; count++; } });
+
+  document.getElementById('filtro-cor-estoque').value = ''; // o valor antigo não existe mais
+  salvar();
+  renderAll();
+  fecharModalRenomearCor();
+  showToast(`✅ ${count} registro(s) renomeado(s) para "${novoNome}".`);
 });
 
 // ── ADD SAIDA ─────────────────────────────────────────────

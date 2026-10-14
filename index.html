@@ -334,7 +334,9 @@
     flex-direction: column;
     align-items: center;
     min-width: 52px;
+    cursor: pointer;
   }
+  .size-pill:hover, .size-pill:focus-visible { border-color: var(--accent); outline: none; }
   .size-pill .sz { font-size: 10px; color: var(--muted); letter-spacing: 1px; margin-bottom: 2px; }
   .size-pill .qty {
     font-family: var(--font-display);
@@ -689,12 +691,25 @@
   <div class="tab-content active" id="tab-estoque">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
       <div class="section-title">Posição Atual do Estoque</div>
-      <div style="display:flex;gap:10px;align-items:center;">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
         <input type="text" id="busca-estoque" placeholder="Buscar modelo..." style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;width:180px;">
+        <button class="btn btn-primary btn-sm" id="btn-abrir-ajuste" style="white-space:nowrap;">⚖️ Ajustar Estoque</button>
       </div>
     </div>
     <div class="estoque-grid" id="estoque-grid">
       <div class="empty"><div class="empty-icon">👕</div>Nenhum produto ainda.<br>Registre uma entrada para começar.</div>
+    </div>
+
+    <div class="section-title" style="margin-top:24px;">Histórico de Ajustes</div>
+    <div class="table-scroll">
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Produto</th><th>De → Para</th><th>Diferença</th><th>Motivo</th><th></th>
+      </tr></thead>
+      <tbody id="tbody-ajustes">
+        <tr><td colspan="6" class="empty">Nenhum ajuste registrado.</td></tr>
+      </tbody>
+    </table>
     </div>
   </div>
 
@@ -1123,6 +1138,40 @@
   </div>
 </div>
 
+<div id="modal-ajuste" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:28px;width:min(480px,95vw);max-height:90vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div style="font-family:var(--font-display);font-size:22px;letter-spacing:2px;color:var(--accent);">⚖️ AJUSTAR ESTOQUE</div>
+      <button onclick="fecharModalAjuste()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;">✕</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group" style="grid-column:span 2;">
+        <label>Produto</label>
+        <select id="ajuste-peca"></select>
+      </div>
+      <div class="form-group" style="grid-column:span 2;">
+        <div style="font-size:13px;color:var(--muted);">Estoque atual (calculado): <strong id="ajuste-atual" style="color:var(--accent);">—</strong></div>
+      </div>
+      <div class="form-group">
+        <label>Quantidade real contada</label>
+        <input type="number" id="ajuste-qtd-real" min="0" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>Data</label>
+        <input type="date" id="ajuste-data">
+      </div>
+      <div class="form-group" style="grid-column:span 2;">
+        <label>Motivo (opcional)</label>
+        <input type="text" id="ajuste-obs" placeholder="Ex: Contagem física, perda, avaria...">
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;margin-top:8px;">
+      <button class="btn btn-primary" id="btn-salvar-ajuste">💾 Salvar Ajuste</button>
+      <button class="btn" style="background:var(--card);color:var(--text);border:1px solid var(--border);" onclick="fecharModalAjuste()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
 
 // ── FIREBASE CONFIG ───────────────────────────────────────
@@ -1178,13 +1227,14 @@ let entradas = [];
 let saidas   = [];
 let custos   = {"dtf":0,"embalagem":0,"outros":0,"outrosDesc":""};
 let investimentos = [];
+let ajustes = [];
 let _carregado = false;
 let rankFiltro = null; // { campo: 'modelo'|'estampa'|'cor'|'tamanho', valor: string } — filtro ativo ao clicar num ranking TOP
 
 // ── SALVAR NA NUVEM ───────────────────────────────────────
 async function salvar() {
   try {
-    await setDoc(DOC_REF, { entradas, saidas, custos, investimentos, atualizado: new Date().toISOString() });
+    await setDoc(DOC_REF, { entradas, saidas, custos, investimentos, ajustes, atualizado: new Date().toISOString() });
   } catch(e) {
     console.error("Erro ao salvar:", e);
     showToast("⚠️ Erro ao salvar na nuvem.", true);
@@ -1201,6 +1251,7 @@ function iniciarSync() {
       saidas   = d.saidas   || [];
       custos   = d.custos   || {"dtf":0,"embalagem":0,"outros":0,"outrosDesc":""};
       investimentos = d.investimentos || [];
+      ajustes  = d.ajustes  || [];
     }
     if (!_carregado) {
       _carregado = true;
@@ -1219,6 +1270,7 @@ function iniciarSync() {
     saidas   = JSON.parse(localStorage.getItem('est_saidas')   || '[]');
     custos   = JSON.parse(localStorage.getItem('est_custos')   || '{"dtf":0,"embalagem":0,"outros":0,"outrosDesc":""}');
     investimentos = JSON.parse(localStorage.getItem('est_investimentos') || '[]');
+    ajustes  = JSON.parse(localStorage.getItem('est_ajustes')  || '[]');
     renderAll();
     renderCustos();
   });
@@ -1260,6 +1312,10 @@ function calcEstoque() {
   saidas.forEach(s => {
     const k = `${s.modelo}||${s.cor}||${s.tamanho}`;
     est[k] = (est[k]||0) - Number(s.qtd);
+  });
+  ajustes.forEach(a => {
+    const k = `${a.modelo}||${a.cor}||${a.tamanho}`;
+    est[k] = (est[k]||0) + Number(a.delta);
   });
   return est;
 }
@@ -1325,7 +1381,7 @@ function renderEstoque(filtro='') {
       .sort((a,b)=>(ordem.indexOf(a[0])-(ordem.indexOf(b[0]))))
       .map(([sz,q])=>{
         const cls = q<=0?'zero':q<=3?'low':'ok';
-        return `<div class="size-pill ${cls}"><span class="sz">${sz}</span><span class="qty">${Math.max(0,q)}</span></div>`;
+        return `<div class="size-pill ${cls}" tabindex="0" title="Toque para ajustar o estoque" data-modelo="${esc(g.modelo)}" data-cor="${esc(g.cor)}" data-tamanho="${esc(sz)}"><span class="sz">${sz}</span><span class="qty">${Math.max(0,q)}</span></div>`;
       }).join('');
 
     html += `<div class="ecard">
@@ -1373,6 +1429,25 @@ function renderInvestimentos() {
       <td>${fmt(inv.valor)}</td>
       <td style="color:var(--muted);font-size:12px">${esc(inv.obs)||'—'}</td>
       <td><button class="btn btn-danger btn-sm" onclick="delInvestimento(${idx})">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── RENDER TABELA AJUSTES DE ESTOQUE ─────────────────────
+function renderAjustes() {
+  const tb = document.getElementById('tbody-ajustes');
+  if(!ajustes.length){ tb.innerHTML='<tr><td colspan="6" class="empty">Nenhum ajuste registrado.</td></tr>'; return; }
+  tb.innerHTML = [...ajustes].reverse().map((a,i)=>{
+    const idx = ajustes.length-1-i;
+    const prod = `${esc(a.modelo)} · ${esc(a.cor)} · ${esc(a.tamanho)}`;
+    const cor  = a.delta>=0 ? 'var(--success)' : 'var(--danger)';
+    return `<tr>
+      <td>${fmtData(a.data)}</td>
+      <td style="font-size:12px">${prod}</td>
+      <td>${a.qtdAntes} → ${a.qtdDepois}</td>
+      <td style="color:${cor};font-weight:600">${a.delta>=0?'+':''}${a.delta}</td>
+      <td style="color:var(--muted);font-size:12px">${esc(a.obs)||'—'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="delAjuste(${idx})">✕</button></td>
     </tr>`;
   }).join('');
 }
@@ -1887,6 +1962,46 @@ function atualizarSelectVendas() {
   calcularLucroLiq();
 }
 
+// ── AJUSTE DE ESTOQUE ─────────────────────────────────────
+// lista todos os produtos já conhecidos (de entradas e vendas), mesmo com estoque zerado ou negativo
+function atualizarSelectAjuste() {
+  const est = calcEstoque();
+  const sel = document.getElementById('ajuste-peca');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">Selecione o produto</option>';
+  Object.keys(est)
+    .sort((a,b)=>a.localeCompare(b))
+    .forEach(k => {
+      const [modelo,cor,tamanho] = k.split('||');
+      const txt = `${modelo} · ${cor} · ${tamanho}  (${est[k]} em estoque)`;
+      sel.innerHTML += `<option value="${esc(k)}"${k===prev?' selected':''}>${esc(txt)}</option>`;
+    });
+}
+
+function atualizarAjusteAtual() {
+  const key = document.getElementById('ajuste-peca').value;
+  const atualEl = document.getElementById('ajuste-atual');
+  const qtdInput = document.getElementById('ajuste-qtd-real');
+  if (!key) { atualEl.textContent = '—'; return; }
+  const est = calcEstoque();
+  const atual = est[key] || 0;
+  atualEl.textContent = atual + ' peças';
+  qtdInput.value = Math.max(0, atual);
+}
+
+function abrirModalAjuste(modelo, cor, tamanho) {
+  atualizarSelectAjuste();
+  const sel = document.getElementById('ajuste-peca');
+  if (modelo) sel.value = `${modelo}||${cor}||${tamanho}`;
+  atualizarAjusteAtual();
+  document.getElementById('ajuste-data').value = hoje();
+  document.getElementById('ajuste-obs').value = '';
+  document.getElementById('modal-ajuste').style.display = 'flex';
+}
+function fecharModalAjuste() {
+  document.getElementById('modal-ajuste').style.display = 'none';
+}
+
 // ── CALCULAR LUCRO LÍQUIDO (prévia) ──────────────────────
 function calcularLucroLiq() {
   const pecaKey = document.getElementById('sai-peca').value;
@@ -1997,6 +2112,34 @@ document.getElementById('btn-add-investimento').addEventListener('click',()=>{
   document.getElementById('inv-data').value=hoje();
 });
 
+// ── AJUSTAR ESTOQUE ───────────────────────────────────────
+document.getElementById('btn-abrir-ajuste').addEventListener('click', () => abrirModalAjuste());
+document.getElementById('ajuste-peca').addEventListener('change', atualizarAjusteAtual);
+document.getElementById('estoque-grid').addEventListener('click', (e) => {
+  const pill = e.target.closest('.size-pill');
+  if (!pill) return;
+  abrirModalAjuste(pill.dataset.modelo, pill.dataset.cor, pill.dataset.tamanho);
+});
+document.getElementById('btn-salvar-ajuste').addEventListener('click', () => {
+  const key = document.getElementById('ajuste-peca').value;
+  const qtdReal = parseInt(document.getElementById('ajuste-qtd-real').value);
+  const data = document.getElementById('ajuste-data').value;
+  const obs = document.getElementById('ajuste-obs').value.trim();
+  if (!key || isNaN(qtdReal) || qtdReal < 0 || !data) {
+    alert('Preencha: Produto, Quantidade real e Data.');
+    return;
+  }
+  const [modelo, cor, tamanho] = key.split('||');
+  const qtdAntes = calcEstoque()[key] || 0;
+  const delta = qtdReal - qtdAntes;
+  if (delta === 0) { fecharModalAjuste(); return; }
+  ajustes.push({modelo, cor, tamanho, qtdAntes, qtdDepois: qtdReal, delta, data, obs});
+  salvar();
+  renderAll();
+  fecharModalAjuste();
+  showToast('✅ Estoque ajustado!');
+});
+
 // ── ADD SAIDA ─────────────────────────────────────────────
 document.getElementById('btn-add-saida').addEventListener('click',()=>{
   const pecaKey = document.getElementById('sai-peca').value;
@@ -2049,6 +2192,10 @@ window.delInvestimento = function(i) {
 window.delSaida = function(i) {
   if(!confirm('Remover esta venda?')) return;
   saidas.splice(i,1); salvar(); renderAll();
+};
+window.delAjuste = function(i) {
+  if(!confirm('Remover este ajuste? O estoque volta a considerar o valor calculado anteriormente.')) return;
+  ajustes.splice(i,1); salvar(); renderAll();
 };
 
 // ── MODAL EDIÇÃO VENDA ────────────────────────────────────
@@ -2189,6 +2336,7 @@ function renderAll() {
   renderEntradas();
   renderSaidas();
   renderInvestimentos();
+  renderAjustes();
   renderSummary();
   atualizarSelectVendas();
   if(document.getElementById('tab-relatorio').classList.contains('active')) renderRelatorio();
@@ -2240,7 +2388,7 @@ document.getElementById('btn-salvar-custos').addEventListener('click',()=>{
 
 // ── HELPERS MODAL BACKUP ─────────────────────────────────
 function abrirModalSalvar() {
-  const dados = { entradas, saidas, custos, investimentos, salvo_em: new Date().toISOString() };
+  const dados = { entradas, saidas, custos, investimentos, ajustes, salvo_em: new Date().toISOString() };
   document.getElementById('backup-textarea').value = JSON.stringify(dados, null, 2);
   document.getElementById('modo-salvar').style.display    = 'block';
   document.getElementById('modo-restaurar').style.display = 'none';
@@ -2264,7 +2412,7 @@ function fecharModalBackup() {
 
 // ── SALVAR BACKUP ─────────────────────────────────────────
 document.getElementById('btn-salvar-backup').addEventListener('click', () => {
-  const dados = { entradas, saidas, custos, salvo_em: new Date().toISOString() };
+  const dados = { entradas, saidas, custos, investimentos, ajustes, salvo_em: new Date().toISOString() };
   const json  = JSON.stringify(dados, null, 2);
   const nome  = `backup_estoque_${hoje()}.json`;
 
@@ -2326,6 +2474,7 @@ document.getElementById('btn-confirmar-restaurar').addEventListener('click', () 
     saidas   = dados.saidas;
     if (dados.custos) custos = dados.custos;
     investimentos = Array.isArray(dados.investimentos) ? dados.investimentos : [];
+    ajustes       = Array.isArray(dados.ajustes) ? dados.ajustes : [];
     salvar();
     renderAll();
     renderCustos();
@@ -2350,6 +2499,7 @@ document.getElementById('input-importar').addEventListener('change', function() 
       saidas   = dados.saidas;
       if (dados.custos) custos = dados.custos;
       investimentos = Array.isArray(dados.investimentos) ? dados.investimentos : [];
+      ajustes       = Array.isArray(dados.ajustes) ? dados.ajustes : [];
       salvar(); renderAll(); renderCustos();
       fecharModalBackup();
       showToast('✅ Backup carregado com sucesso!');

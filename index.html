@@ -382,6 +382,14 @@
     font-size: 13px;
     outline: none;
   }
+  .estoque-toolbar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .estoque-toolbar .busca-full { grid-column: 1 / -1; }
+  .estoque-toolbar .btn { width: 100%; white-space: normal; }
   .chart-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -695,13 +703,17 @@
 
   <!-- ABA ESTOQUE -->
   <div class="tab-content active" id="tab-estoque">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-      <div class="section-title">Posição Atual do Estoque</div>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-        <input type="text" id="busca-estoque" placeholder="Buscar modelo..." style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;width:180px;">
-        <button class="btn btn-sm filtro-toggle" id="btn-filtro-com-estoque" style="white-space:nowrap;">📦 Só com estoque</button>
-        <button class="btn btn-primary btn-sm" id="btn-abrir-ajuste" style="white-space:nowrap;">⚖️ Ajustar Estoque</button>
-      </div>
+    <div class="section-title">Posição Atual do Estoque</div>
+    <div class="estoque-toolbar">
+      <input type="text" id="busca-estoque" class="filtro-control busca-full" placeholder="Buscar modelo...">
+      <select id="filtro-modelo-estoque" class="filtro-control">
+        <option value="">Todos os modelos</option>
+      </select>
+      <select id="filtro-cor-estoque" class="filtro-control">
+        <option value="">Todas as cores</option>
+      </select>
+      <button class="btn btn-sm filtro-toggle" id="btn-filtro-com-estoque">📦 Só com estoque</button>
+      <button class="btn btn-primary btn-sm" id="btn-abrir-ajuste">⚖️ Ajustar Estoque</button>
     </div>
     <div class="estoque-grid" id="estoque-grid">
       <div class="empty"><div class="empty-icon">👕</div>Nenhum produto ainda.<br>Registre uma entrada para começar.</div>
@@ -1359,15 +1371,39 @@ function movMes(lista) {
 }
 
 // ── RENDER ESTOQUE ───────────────────────────────────────
+// popula os selects de Modelo e Cor do filtro de estoque; cor fica restrita ao modelo escolhido
+function atualizarFiltrosEstoque() {
+  const grupos = getEstoqueAgrupado();
+  const selModelo = document.getElementById('filtro-modelo-estoque');
+  const selCor = document.getElementById('filtro-cor-estoque');
+  const prevModelo = selModelo.value;
+  const prevCor = selCor.value;
+
+  const modelos = [...new Set(Object.values(grupos).map(g=>g.modelo))].sort();
+  selModelo.innerHTML = '<option value="">Todos os modelos</option>' +
+    modelos.map(m=>`<option value="${esc(m)}"${m===prevModelo?' selected':''}>${esc(m)}</option>`).join('');
+
+  const modeloAtivo = selModelo.value;
+  const cores = [...new Set(Object.values(grupos)
+    .filter(g => !modeloAtivo || g.modelo === modeloAtivo)
+    .map(g=>g.cor))].sort();
+  selCor.innerHTML = '<option value="">Todas as cores</option>' +
+    cores.map(c=>`<option value="${esc(c)}"${c===prevCor?' selected':''}>${esc(c)}</option>`).join('');
+}
+
 function renderEstoque(filtro='') {
   const grupos = getEstoqueAgrupado();
   const grid = document.getElementById('estoque-grid');
   const ordem = ['PP','P','M','G','GG','XGG','Único','Inf. 2','Inf. 4','Inf. 6','Inf. 8','Inf. 10','Inf. 12','Inf. 14','Inf. 16'];
+  const modeloFiltro = document.getElementById('filtro-modelo-estoque').value;
+  const corFiltro = document.getElementById('filtro-cor-estoque').value;
   let html = '';
   let keys = Object.keys(grupos).filter(k=>{
     if(!filtro) return true;
     return k.toLowerCase().includes(filtro.toLowerCase());
   });
+  if (modeloFiltro) keys = keys.filter(k => grupos[k].modelo === modeloFiltro);
+  if (corFiltro)    keys = keys.filter(k => grupos[k].cor === corFiltro);
   if (filtroSoEstoque) {
     keys = keys.filter(k => Object.values(grupos[k].tamanhos).some(q => q > 0));
   }
@@ -2323,6 +2359,13 @@ document.getElementById('btn-filtro-com-estoque').addEventListener('click', () =
   document.getElementById('btn-filtro-com-estoque').classList.toggle('active', filtroSoEstoque);
   renderEstoque(document.getElementById('busca-estoque').value);
 });
+document.getElementById('filtro-modelo-estoque').addEventListener('change', () => {
+  atualizarFiltrosEstoque(); // recalcula as cores disponíveis para o modelo escolhido
+  renderEstoque(document.getElementById('busca-estoque').value);
+});
+document.getElementById('filtro-cor-estoque').addEventListener('change', () => {
+  renderEstoque(document.getElementById('busca-estoque').value);
+});
 
 // ── SELECTS DINÂMICOS ─────────────────────────────────────
 document.getElementById('sai-filtro-fornecedor').addEventListener('change', atualizarSelectVendas);
@@ -2348,6 +2391,7 @@ document.getElementById('rel-data-fim').addEventListener('change', function() {
 
 // ── RENDER ALL ────────────────────────────────────────────
 function renderAll() {
+  atualizarFiltrosEstoque();
   renderEstoque(document.getElementById('busca-estoque').value);
   renderEntradas();
   renderSaidas();

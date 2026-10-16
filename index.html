@@ -874,10 +874,40 @@
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);margin-bottom:12px;">Prévia do Lucro Líquido</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px;">
         <div style="font-size:13px;color:var(--muted);">Receita líquida<br><span id="ll-receita" style="font-size:16px;color:var(--text);font-weight:600;"></span></div>
-        <div style="font-size:13px;color:var(--muted);">Custo camisa<br><span id="ll-custo-camisa" style="font-size:16px;color:var(--danger);font-weight:600;"></span></div>
-        <div style="font-size:13px;color:var(--muted);">Custos adicionais<br><span id="ll-custos-extras" style="font-size:16px;color:var(--danger);font-weight:600;"></span></div>
-        <div style="font-size:13px;color:var(--muted);" id="ll-taxa-label" style="display:none;">Taxa canal<br><span id="ll-taxa" style="font-size:16px;color:var(--danger);font-weight:600;"></span></div>
+        <div style="font-size:13px;color:var(--muted);">
+          <span id="ll-custo-camisa-toggle" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;">Custo camisa <span id="ll-custo-camisa-arrow">▸</span></span>
+          <br><span id="ll-custo-camisa" style="font-size:16px;color:var(--danger);font-weight:600;"></span>
+        </div>
+        <div style="font-size:13px;color:var(--muted);">
+          <span id="ll-custos-extras-toggle" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;">Custos adicionais <span id="ll-custos-extras-arrow">▸</span></span>
+          <br><span id="ll-custos-extras" style="font-size:16px;color:var(--danger);font-weight:600;"></span>
+        </div>
+        <div id="ll-taxa-label" style="font-size:13px;color:var(--muted);display:none;">Taxa canal<br><span id="ll-taxa" style="font-size:16px;color:var(--danger);font-weight:600;"></span></div>
       </div>
+
+      <div id="ll-custo-camisa-detalhe" style="display:none;margin-bottom:14px;padding:12px;background:var(--surface);border-radius:8px;">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Entradas usadas no custo médio ponderado:</div>
+        <div id="ll-custo-camisa-lista" style="font-size:12px;"></div>
+      </div>
+
+      <div id="ll-custos-extras-detalhe" style="display:none;margin-bottom:14px;padding:12px;background:var(--surface);border-radius:8px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;">
+          <div>
+            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">DTF</label>
+            <input type="number" id="ll-edit-dtf" class="filtro-control" step="0.01" min="0" style="width:100%;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Embalagem</label>
+            <input type="number" id="ll-edit-embalagem" class="filtro-control" step="0.01" min="0" style="width:100%;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Outros</label>
+            <input type="number" id="ll-edit-outros" class="filtro-control" step="0.01" min="0" style="width:100%;box-sizing:border-box;">
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px;">Altera os custos cadastrados na aba Custos — vale para todas as vendas.</div>
+      </div>
+
       <div style="border-top:1px solid var(--border);padding-top:12px;display:flex;align-items:center;gap:14px;">
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);">Lucro Líquido por Peça</div>
         <div id="ll-valor" style="font-family:var(--font-display);font-size:32px;"></div>
@@ -1627,7 +1657,7 @@ function renderRelatorio() {
       const custoCamisa  = custoMedioPonderado(m.modelo, m.cor, m.tamanho);
       const custosExtras = (custos.dtf||0) + (custos.embalagem||0) + (custos.outros||0);
       let taxaCanal = 0;
-      if (m.canal === 'Shopee') taxaCanal = receita * 0.20 + 4;
+      if (m.canal === 'Shopee') taxaCanal = receita * 0.20 + 4.5;
       const custoTotal = (custoCamisa + custosExtras + taxaCanal) * m.qtd;
       custoCell = `<span class="custo-cell" tabindex="0" data-custo-camisa="${(custoCamisa*m.qtd).toFixed(2)}" data-custo-extras="${(custosExtras*m.qtd).toFixed(2)}" data-custo-taxa="${(taxaCanal*m.qtd).toFixed(2)}">${fmt(custoTotal)}</span>`;
     } else {
@@ -2112,9 +2142,23 @@ function calcularLucroLiq() {
   // taxa canal
   let taxa = 0;
   let taxaFixa = 0;
-  if(canal === 'Shopee') { taxa = receitaLiq * 0.20; taxaFixa = 4; }
+  if(canal === 'Shopee') { taxa = receitaLiq * 0.20; taxaFixa = 4.5; }
 
   const lucro = receitaLiq - custoCamisa - custosExtras - taxa - taxaFixa;
+
+  // entradas que compõem o custo médio ponderado (pra conferir de onde vem o valor)
+  const entsCamisa = entradas.filter(e=>e.modelo===modelo&&e.cor===cor&&e.tamanho===tamanho);
+  document.getElementById('ll-custo-camisa-lista').innerHTML = entsCamisa.length
+    ? entsCamisa.map(e=>`<div>${fmtData(e.data)} — ${e.qtd} un. × ${fmt(e.custo)}</div>`).join('')
+    : '<div style="color:var(--muted)">Nenhuma entrada registrada para essa peça.</div>';
+
+  // campos editáveis de custos adicionais (não sobrescreve enquanto o campo está em foco)
+  const inDtf = document.getElementById('ll-edit-dtf');
+  const inEmb = document.getElementById('ll-edit-embalagem');
+  const inOut = document.getElementById('ll-edit-outros');
+  if (document.activeElement !== inDtf) inDtf.value = custos.dtf || '';
+  if (document.activeElement !== inEmb) inEmb.value = custos.embalagem || '';
+  if (document.activeElement !== inOut) inOut.value = custos.outros || '';
 
   // atualizar painel
   document.getElementById('ll-receita').textContent       = fmt(receitaLiq);
@@ -2125,7 +2169,7 @@ function calcularLucroLiq() {
   const llTaxa      = document.getElementById('ll-taxa');
   if(canal === 'Shopee') {
     llTaxaLabel.style.display = '';
-    llTaxa.textContent = `- ${fmt(taxa + taxaFixa)} (20% + R$ 4,00)`;
+    llTaxa.textContent = `- ${fmt(taxa + taxaFixa)} (20% + R$ 4,50)`;
   } else {
     llTaxaLabel.style.display = 'none';
   }
@@ -2371,7 +2415,7 @@ document.getElementById('btn-salvar-edit').addEventListener('click', ()=>{
   const custosExtras = (custos.dtf||0)+(custos.embalagem||0)+(custos.outros||0);
   const receitaLiq   = preco - desconto;
   let taxa=0, taxaFixa=0;
-  if(canal==='Shopee'){ taxa=receitaLiq*0.20; taxaFixa=4; }
+  if(canal==='Shopee'){ taxa=receitaLiq*0.20; taxaFixa=4.5; }
   const lucroLiq = receitaLiq - custoCamisa - custosExtras - taxa - taxaFixa;
 
   saidas[idx] = {modelo,cor,tamanho,estampa,canal,qtd,preco,desconto,lucroLiq,data,obs};
@@ -2433,6 +2477,29 @@ document.getElementById('sai-peca').addEventListener('change', atualizarDisponiv
 document.getElementById('sai-canal').addEventListener('change', calcularLucroLiq);
 document.getElementById('sai-preco').addEventListener('input', calcularLucroLiq);
 document.getElementById('sai-desconto').addEventListener('input', calcularLucroLiq);
+
+// ── PRÉVIA DE LUCRO: detalhes expansíveis ──────────────────
+document.getElementById('ll-custo-camisa-toggle').addEventListener('click', () => {
+  const det = document.getElementById('ll-custo-camisa-detalhe');
+  const aberto = det.style.display !== 'none';
+  det.style.display = aberto ? 'none' : 'block';
+  document.getElementById('ll-custo-camisa-arrow').textContent = aberto ? '▸' : '▾';
+});
+document.getElementById('ll-custos-extras-toggle').addEventListener('click', () => {
+  const det = document.getElementById('ll-custos-extras-detalhe');
+  const aberto = det.style.display !== 'none';
+  det.style.display = aberto ? 'none' : 'block';
+  document.getElementById('ll-custos-extras-arrow').textContent = aberto ? '▸' : '▾';
+});
+function salvarCustoRapido(campo, elId) {
+  custos[campo] = parseFloat(document.getElementById(elId).value) || 0;
+  salvar();
+  renderCustos();
+  calcularLucroLiq();
+}
+document.getElementById('ll-edit-dtf').addEventListener('change', () => salvarCustoRapido('dtf', 'll-edit-dtf'));
+document.getElementById('ll-edit-embalagem').addEventListener('change', () => salvarCustoRapido('embalagem', 'll-edit-embalagem'));
+document.getElementById('ll-edit-outros').addEventListener('change', () => salvarCustoRapido('outros', 'll-edit-outros'));
 document.getElementById('rel-filtro').addEventListener('change', function() {
   const custom = this.value === 'custom';
   document.getElementById('rel-data-ini').style.display = custom ? '' : 'none';

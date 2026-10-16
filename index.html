@@ -1086,13 +1086,17 @@
       </div>
     </div>
     <div class="stat-row" style="margin-top:-4px;">
-      <div class="stat-box" style="grid-column:span 2;">
+      <div class="stat-box">
         <div class="lbl">Lucro Líquido Total (R$)</div>
         <div class="val" id="rel-lucro-liq" style="color:var(--success)">R$ 0,00</div>
       </div>
       <div class="stat-box">
         <div class="lbl">% Lucro Líquido</div>
         <div class="val" id="rel-pct-liq" style="color:var(--accent)">0,0%</div>
+      </div>
+      <div class="stat-box">
+        <div class="lbl">Saldo em Caixa (R$)</div>
+        <div class="val" id="rel-caixa" style="color:var(--success)">R$ 0,00</div>
       </div>
     </div>
 
@@ -1637,15 +1641,23 @@ function renderRelatorio() {
   }
   const ents = entradas.filter(e=>pass(e.data));
   const sais = saidas.filter(s=>pass(s.data));
+  const invs = investimentos.filter(i=>pass(i.data));
   const totalComprado  = ents.reduce((a,b)=>a+b.custo*b.qtd,0);
   const totalVendido   = sais.reduce((a,b)=>a+(b.preco-(b.desconto||0))*b.qtd,0);
   const totalLucroLiq  = sais.reduce((a,b)=>a+(b.lucroLiq||0)*b.qtd,0);
   const pctLucroLiq    = totalVendido>0 ? (totalLucroLiq/totalVendido*100) : 0;
 
+  // saldo em caixa: dinheiro que realmente entrou e saiu (vendas - compras com frete - investimentos em ads)
+  const totalCompradoComFrete = ents.reduce((a,e)=>a+e.custo*e.qtd+(e.frete||0),0);
+  const totalInvestido = invs.reduce((a,i)=>a+Number(i.valor||0),0);
+  const saldoCaixa = totalVendido - totalCompradoComFrete - totalInvestido;
+
   document.getElementById('rel-comprado').textContent  = fmt(totalComprado);
   document.getElementById('rel-vendido').textContent   = fmt(totalVendido);
   document.getElementById('rel-lucro').textContent     = fmt(totalVendido-totalComprado);
   document.getElementById('rel-lucro-liq').textContent = fmt(totalLucroLiq);
+  document.getElementById('rel-caixa').textContent     = fmt(saldoCaixa);
+  document.getElementById('rel-caixa').style.color     = saldoCaixa>=0?'var(--success)':'var(--danger)';
   document.getElementById('rel-lucro-liq').style.color = totalLucroLiq>=0?'var(--success)':'var(--danger)';
   document.getElementById('rel-pct-liq').textContent   = pctLucroLiq.toFixed(1)+'%';
   document.getElementById('rel-pct-liq').style.color   = pctLucroLiq>=0?'var(--accent)':'var(--danger)';

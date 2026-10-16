@@ -1641,16 +1641,14 @@ function renderRelatorio() {
   }
   const ents = entradas.filter(e=>pass(e.data));
   const sais = saidas.filter(s=>pass(s.data));
-  const invs = investimentos.filter(i=>pass(i.data));
   const totalComprado  = ents.reduce((a,b)=>a+b.custo*b.qtd,0);
   const totalVendido   = sais.reduce((a,b)=>a+(b.preco-(b.desconto||0))*b.qtd,0);
   const totalLucroLiq  = sais.reduce((a,b)=>a+(b.lucroLiq||0)*b.qtd,0);
   const pctLucroLiq    = totalVendido>0 ? (totalLucroLiq/totalVendido*100) : 0;
 
-  // saldo em caixa: dinheiro que realmente entrou e saiu (vendas - compras com frete - investimentos em ads)
-  const totalCompradoComFrete = ents.reduce((a,e)=>a+e.custo*e.qtd+(e.frete||0),0);
-  const totalInvestido = invs.reduce((a,i)=>a+Number(i.valor||0),0);
-  const saldoCaixa = totalVendido - totalCompradoComFrete - totalInvestido;
+  // saldo em caixa: valor vendido menos o custo das peças vendidas (custo médio + custos
+  // adicionais + taxa de canal) — é o mesmo total do Lucro Líquido, só que a partir da receita
+  const saldoCaixa = totalLucroLiq;
 
   document.getElementById('rel-comprado').textContent  = fmt(totalComprado);
   document.getElementById('rel-vendido').textContent   = fmt(totalVendido);

@@ -1646,9 +1646,10 @@ function renderRelatorio() {
   const totalLucroLiq  = sais.reduce((a,b)=>a+(b.lucroLiq||0)*b.qtd,0);
   const pctLucroLiq    = totalVendido>0 ? (totalLucroLiq/totalVendido*100) : 0;
 
-  // saldo em caixa: valor vendido menos o custo das peças vendidas (custo médio + custos
-  // adicionais + taxa de canal) — é o mesmo total do Lucro Líquido, só que a partir da receita
-  const saldoCaixa = totalLucroLiq;
+  // saldo em caixa: lucro líquido + custo da camisa das peças vendidas — o custo da camisa já
+  // saiu do caixa quando a entrada foi comprada (Total Comprado), então não entra de novo aqui
+  const custoCamisaVendida = sais.reduce((a,s)=>a+custoMedioPonderado(s.modelo,s.cor,s.tamanho)*s.qtd,0);
+  const saldoCaixa = totalLucroLiq + custoCamisaVendida;
 
   document.getElementById('rel-comprado').textContent  = fmt(totalComprado);
   document.getElementById('rel-vendido').textContent   = fmt(totalVendido);

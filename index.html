@@ -904,6 +904,10 @@
             <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Outros</label>
             <input type="number" id="ll-edit-outros" class="filtro-control" step="0.01" min="0" style="width:100%;box-sizing:border-box;">
           </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Outros 2</label>
+            <input type="number" id="ll-edit-outros2" class="filtro-control" step="0.01" min="0" style="width:100%;box-sizing:border-box;">
+          </div>
         </div>
         <div style="font-size:11px;color:var(--muted);margin-top:8px;">Altera os custos cadastrados na aba Custos — vale para todas as vendas.</div>
       </div>
@@ -956,6 +960,14 @@
         <label>Descrição "Outros"</label>
         <input type="text" id="cust-outros-desc" placeholder="Ex: Etiqueta, Linha...">
       </div>
+      <div class="form-group">
+        <label>Outros Custos 2 (R$ por peça)</label>
+        <input type="number" id="cust-outros2" placeholder="0,00" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Descrição "Outros 2"</label>
+        <input type="text" id="cust-outros2-desc" placeholder="Ex: Etiqueta, Linha...">
+      </div>
     </div>
     <button class="btn btn-primary" id="btn-salvar-custos">💾 Salvar Custos</button>
 
@@ -973,6 +985,10 @@
       <div class="stat-box">
         <div class="lbl" id="res-outros-lbl">Outros</div>
         <div class="val" id="res-outros" style="color:var(--accent2);font-size:24px">R$ 0,00</div>
+      </div>
+      <div class="stat-box">
+        <div class="lbl" id="res-outros2-lbl">Outros 2</div>
+        <div class="val" id="res-outros2" style="color:var(--accent2);font-size:24px">R$ 0,00</div>
       </div>
     </div>
     <div style="max-width:700px;background:var(--card);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:8px;padding:16px 20px;margin-top:4px;">
@@ -1296,7 +1312,7 @@ window.addEventListener('appinstalled', () => {
 // ── ESTADO ──────────────────────────────────────────────
 let entradas = [];
 let saidas   = [];
-let custos   = {"dtf":0,"embalagem":0,"outros":0,"outrosDesc":""};
+let custos   = {"dtf":0,"embalagem":0,"outros":0,"outrosDesc":"","outros2":0,"outros2Desc":""};
 let investimentos = [];
 let ajustes = [];
 let _carregado = false;
@@ -1321,7 +1337,7 @@ function iniciarSync() {
       const d = snap.data();
       entradas = d.entradas || [];
       saidas   = d.saidas   || [];
-      custos   = d.custos   || {"dtf":0,"embalagem":0,"outros":0,"outrosDesc":""};
+      custos   = d.custos   || {"dtf":0,"embalagem":0,"outros":0,"outrosDesc":"","outros2":0,"outros2Desc":""};
       investimentos = d.investimentos || [];
       ajustes  = d.ajustes  || [];
     }
@@ -1340,7 +1356,7 @@ function iniciarSync() {
     // fallback localStorage
     entradas = JSON.parse(localStorage.getItem('est_entradas') || '[]');
     saidas   = JSON.parse(localStorage.getItem('est_saidas')   || '[]');
-    custos   = JSON.parse(localStorage.getItem('est_custos')   || '{"dtf":0,"embalagem":0,"outros":0,"outrosDesc":""}');
+    custos   = JSON.parse(localStorage.getItem('est_custos')   || '{"dtf":0,"embalagem":0,"outros":0,"outrosDesc":"","outros2":0,"outros2Desc":""}');
     investimentos = JSON.parse(localStorage.getItem('est_investimentos') || '[]');
     ajustes  = JSON.parse(localStorage.getItem('est_ajustes')  || '[]');
     renderAll();
@@ -1673,7 +1689,7 @@ function renderRelatorio() {
 
       // composição do custo (por peça) — a mesma conta usada no lucro líquido
       const custoCamisa  = custoMedioPonderado(m.modelo, m.cor, m.tamanho);
-      const custosExtras = (custos.dtf||0) + (custos.embalagem||0) + (custos.outros||0);
+      const custosExtras = (custos.dtf||0) + (custos.embalagem||0) + (custos.outros||0) + (custos.outros2||0);
       let taxaCanal = 0;
       if (m.canal === 'Shopee') taxaCanal = receita * 0.20 + 4.5;
       const custoTotal = (custoCamisa + custosExtras + taxaCanal) * m.qtd;
@@ -2152,7 +2168,7 @@ function calcularLucroLiq() {
   const custoCamisa = custoMedioPonderado(modelo, cor, tamanho);
 
   // custos adicionais por peça
-  const custosExtras = (custos.dtf||0) + (custos.embalagem||0) + (custos.outros||0);
+  const custosExtras = (custos.dtf||0) + (custos.embalagem||0) + (custos.outros||0) + (custos.outros2||0);
 
   // receita líquida após desconto
   const receitaLiq = preco - desconto;
@@ -2171,12 +2187,14 @@ function calcularLucroLiq() {
     : '<div style="color:var(--muted)">Nenhuma entrada registrada para essa peça.</div>';
 
   // campos editáveis de custos adicionais (não sobrescreve enquanto o campo está em foco)
-  const inDtf = document.getElementById('ll-edit-dtf');
-  const inEmb = document.getElementById('ll-edit-embalagem');
-  const inOut = document.getElementById('ll-edit-outros');
-  if (document.activeElement !== inDtf) inDtf.value = custos.dtf || '';
-  if (document.activeElement !== inEmb) inEmb.value = custos.embalagem || '';
-  if (document.activeElement !== inOut) inOut.value = custos.outros || '';
+  const inDtf  = document.getElementById('ll-edit-dtf');
+  const inEmb  = document.getElementById('ll-edit-embalagem');
+  const inOut  = document.getElementById('ll-edit-outros');
+  const inOut2 = document.getElementById('ll-edit-outros2');
+  if (document.activeElement !== inDtf)  inDtf.value  = custos.dtf || '';
+  if (document.activeElement !== inEmb)  inEmb.value  = custos.embalagem || '';
+  if (document.activeElement !== inOut)  inOut.value  = custos.outros || '';
+  if (document.activeElement !== inOut2) inOut2.value = custos.outros2 || '';
 
   // atualizar painel
   document.getElementById('ll-receita').textContent       = fmt(receitaLiq);
@@ -2430,7 +2448,7 @@ document.getElementById('btn-salvar-edit').addEventListener('click', ()=>{
 
   // recalcular lucro líquido com os novos valores
   const custoCamisa  = custoMedioPonderado(modelo, cor, tamanho);
-  const custosExtras = (custos.dtf||0)+(custos.embalagem||0)+(custos.outros||0);
+  const custosExtras = (custos.dtf||0)+(custos.embalagem||0)+(custos.outros||0)+(custos.outros2||0);
   const receitaLiq   = preco - desconto;
   let taxa=0, taxaFixa=0;
   if(canal==='Shopee'){ taxa=receitaLiq*0.20; taxaFixa=4.5; }
@@ -2518,6 +2536,7 @@ function salvarCustoRapido(campo, elId) {
 document.getElementById('ll-edit-dtf').addEventListener('change', () => salvarCustoRapido('dtf', 'll-edit-dtf'));
 document.getElementById('ll-edit-embalagem').addEventListener('change', () => salvarCustoRapido('embalagem', 'll-edit-embalagem'));
 document.getElementById('ll-edit-outros').addEventListener('change', () => salvarCustoRapido('outros', 'll-edit-outros'));
+document.getElementById('ll-edit-outros2').addEventListener('change', () => salvarCustoRapido('outros2', 'll-edit-outros2'));
 document.getElementById('rel-filtro').addEventListener('change', function() {
   const custom = this.value === 'custom';
   document.getElementById('rel-data-ini').style.display = custom ? '' : 'none';
@@ -2558,36 +2577,44 @@ function showToast(msg, erro=false) {
 
 // ── CUSTOS ────────────────────────────────────────────────
 function renderCustos() {
-  document.getElementById('cust-dtf').value         = custos.dtf||'';
-  document.getElementById('cust-embalagem').value   = custos.embalagem||'';
-  document.getElementById('cust-outros').value      = custos.outros||'';
-  document.getElementById('cust-outros-desc').value = custos.outrosDesc||'';
+  document.getElementById('cust-dtf').value          = custos.dtf||'';
+  document.getElementById('cust-embalagem').value    = custos.embalagem||'';
+  document.getElementById('cust-outros').value       = custos.outros||'';
+  document.getElementById('cust-outros-desc').value  = custos.outrosDesc||'';
+  document.getElementById('cust-outros2').value      = custos.outros2||'';
+  document.getElementById('cust-outros2-desc').value = custos.outros2Desc||'';
   atualizarResumoCustos();
 }
 
 function atualizarResumoCustos() {
-  const dtf  = parseFloat(document.getElementById('cust-dtf').value)||0;
-  const emb  = parseFloat(document.getElementById('cust-embalagem').value)||0;
-  const out  = parseFloat(document.getElementById('cust-outros').value)||0;
-  const desc = document.getElementById('cust-outros-desc').value.trim();
-  document.getElementById('res-dtf').textContent       = fmt(dtf);
-  document.getElementById('res-embalagem').textContent = fmt(emb);
-  document.getElementById('res-outros').textContent    = fmt(out);
-  document.getElementById('res-outros-lbl').textContent= desc||'Outros';
-  document.getElementById('res-total').textContent     = fmt(dtf+emb+out);
+  const dtf   = parseFloat(document.getElementById('cust-dtf').value)||0;
+  const emb   = parseFloat(document.getElementById('cust-embalagem').value)||0;
+  const out   = parseFloat(document.getElementById('cust-outros').value)||0;
+  const desc  = document.getElementById('cust-outros-desc').value.trim();
+  const out2  = parseFloat(document.getElementById('cust-outros2').value)||0;
+  const desc2 = document.getElementById('cust-outros2-desc').value.trim();
+  document.getElementById('res-dtf').textContent        = fmt(dtf);
+  document.getElementById('res-embalagem').textContent  = fmt(emb);
+  document.getElementById('res-outros').textContent     = fmt(out);
+  document.getElementById('res-outros-lbl').textContent = desc||'Outros';
+  document.getElementById('res-outros2').textContent    = fmt(out2);
+  document.getElementById('res-outros2-lbl').textContent= desc2||'Outros 2';
+  document.getElementById('res-total').textContent      = fmt(dtf+emb+out+out2);
 }
 
 document.getElementById('btn-salvar-custos').addEventListener('click',()=>{
-  custos.dtf        = parseFloat(document.getElementById('cust-dtf').value)||0;
-  custos.embalagem  = parseFloat(document.getElementById('cust-embalagem').value)||0;
-  custos.outros     = parseFloat(document.getElementById('cust-outros').value)||0;
-  custos.outrosDesc = document.getElementById('cust-outros-desc').value.trim();
+  custos.dtf         = parseFloat(document.getElementById('cust-dtf').value)||0;
+  custos.embalagem   = parseFloat(document.getElementById('cust-embalagem').value)||0;
+  custos.outros      = parseFloat(document.getElementById('cust-outros').value)||0;
+  custos.outrosDesc  = document.getElementById('cust-outros-desc').value.trim();
+  custos.outros2     = parseFloat(document.getElementById('cust-outros2').value)||0;
+  custos.outros2Desc = document.getElementById('cust-outros2-desc').value.trim();
   salvar();
   atualizarResumoCustos();
   showToast('✅ Custos salvos!');
 });
 
-['cust-dtf','cust-embalagem','cust-outros','cust-outros-desc'].forEach(id=>{
+['cust-dtf','cust-embalagem','cust-outros','cust-outros-desc','cust-outros2','cust-outros2-desc'].forEach(id=>{
   document.getElementById(id).addEventListener('input', atualizarResumoCustos);
 });
 

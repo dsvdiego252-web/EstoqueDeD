@@ -1360,12 +1360,30 @@ function esc(s) {
 }
 
 // custo médio ponderado por quantidade
+// custo médio ponderado, zerando sempre que o estoque daquele produto chega a zero —
+// assim uma entrada antiga não continua pesando na média depois que o lote antigo já saiu
+// todo e o estoque foi reiniciado (venda total + reposição, ou ajuste de contagem)
 function custoMedioPonderado(modelo, cor, tamanho) {
-  const ents = entradas.filter(e=>e.modelo===modelo&&e.cor===cor&&e.tamanho===tamanho);
-  if(!ents.length) return 0;
-  const totalQtd  = ents.reduce((a,e)=>a+Number(e.qtd),0);
-  const totalCusto= ents.reduce((a,e)=>a+Number(e.custo)*Number(e.qtd),0);
-  return totalQtd > 0 ? totalCusto/totalQtd : 0;
+  const bate = x => x.modelo===modelo && x.cor===cor && x.tamanho===tamanho;
+  const movs = [
+    ...entradas.filter(bate).map(e => ({ data: e.data, tipo: 'entrada', qtd: Number(e.qtd), custo: Number(e.custo) })),
+    ...saidas.filter(bate).map(s => ({ data: s.data, tipo: 'saida', qtd: Number(s.qtd) })),
+    ...ajustes.filter(bate).map(a => ({ data: a.data, tipo: 'ajuste', qtd: Number(a.delta) })),
+  ].sort((a,b) => a.data.localeCompare(b.data));
+
+  let qtdEmEstoque = 0;
+  let custoMedio = 0;
+  movs.forEach(m => {
+    if (m.tipo === 'entrada') {
+      const novaQtd = qtdEmEstoque + m.qtd;
+      custoMedio = novaQtd > 0 ? (qtdEmEstoque*custoMedio + m.qtd*m.custo) / novaQtd : 0;
+      qtdEmEstoque = novaQtd;
+    } else {
+      qtdEmEstoque += (m.tipo === 'saida' ? -m.qtd : m.qtd);
+    }
+    if (qtdEmEstoque <= 0) { qtdEmEstoque = 0; custoMedio = 0; }
+  });
+  return custoMedio;
 }
 
 // ── DATA INIT ────────────────────────────────────────────

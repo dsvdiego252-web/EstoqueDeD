@@ -1646,14 +1646,13 @@ function renderRelatorio() {
   const totalLucroLiq  = sais.reduce((a,b)=>a+(b.lucroLiq||0)*b.qtd,0);
   const pctLucroLiq    = totalVendido>0 ? (totalLucroLiq/totalVendido*100) : 0;
 
-  // saldo em caixa: valor vendido menos custos extras (DTF/Embalagem/Outros — sem o Outros 2)
-  // e taxa de canal. O custo da camisa já saiu do caixa quando a entrada foi comprada (Total
-  // Comprado), então não entra aqui; e Outros Custos 2 também não é descontado do caixa.
+  // saldo em caixa: custo da camisa + lucro líquido + DTF + embalagem + outros, por peça vendida.
+  // Não entra Outros Custos 2 (não deve reduzir o caixa) nem a taxa do canal (já descontada
+  // dentro do lucro líquido e não volta pro caixa).
   const custosExtrasCaixa = (custos.dtf||0) + (custos.embalagem||0) + (custos.outros||0);
   const saldoCaixa = sais.reduce((a,s) => {
-    const receita = s.preco - (s.desconto||0);
-    const taxaCanal = s.canal === 'Shopee' ? receita*0.20 + 4.5 : 0;
-    return a + (receita - custosExtrasCaixa - taxaCanal) * s.qtd;
+    const custoCamisa = custoMedioPonderado(s.modelo, s.cor, s.tamanho);
+    return a + (custoCamisa + (s.lucroLiq||0) + custosExtrasCaixa) * s.qtd;
   }, 0);
 
   document.getElementById('rel-comprado').textContent  = fmt(totalComprado);

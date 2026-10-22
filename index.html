@@ -1581,8 +1581,9 @@ function renderSaidas() {
     const desc  = s.desconto||0;
     const total = (s.preco - desc) * s.qtd;
     const receita = s.preco - desc;
+    const lucroTotal = (s.lucroLiq||0) * s.qtd;
     const pct   = receita>0 ? ((s.lucroLiq/receita)*100) : 0;
-    const llCor = s.lucroLiq>=0 ? 'var(--success)' : 'var(--danger)';
+    const llCor = lucroTotal>=0 ? 'var(--success)' : 'var(--danger)';
     const pctCor= pct>=0 ? 'var(--success)' : 'var(--danger)';
     return `<tr>
       <td>${fmtData(s.data)}</td>
@@ -1593,7 +1594,7 @@ function renderSaidas() {
       <td>${fmt(s.preco)}</td>
       <td>${desc>0?fmt(desc):'—'}</td>
       <td>${fmt(total)}</td>
-      <td style="color:${llCor};font-weight:600">${fmt(s.lucroLiq)}</td>
+      <td style="color:${llCor};font-weight:600">${fmt(lucroTotal)}</td>
       <td style="color:${pctCor};font-weight:600">${pct.toFixed(1)}%</td>
       <td style="color:var(--muted);font-size:12px">${esc(s.obs)||'—'}</td>
       <td style="display:flex;gap:6px;">
@@ -1631,11 +1632,12 @@ function renderRelatorio() {
 
   // saldo em caixa: custo da camisa + lucro líquido + DTF + embalagem + outros, por peça vendida.
   // Não entra Outros Custos 2 (não deve reduzir o caixa) nem a taxa do canal (já descontada
-  // dentro do lucro líquido e não volta pro caixa).
-  const custosExtrasCaixa = (custos.dtf||0) + (custos.embalagem||0) + (custos.outros||0);
+  // dentro do lucro líquido e não volta pro caixa). A embalagem é uma só por venda, não por peça.
+  const custosExtrasCaixa = (custos.dtf||0) + (custos.outros||0);
   const saldoCaixa = sais.reduce((a,s) => {
     const custoCamisa = custoMedioPonderado(s.modelo, s.cor, s.tamanho);
-    return a + (custoCamisa + (s.lucroLiq||0) + custosExtrasCaixa) * s.qtd;
+    const embalagemRateada = (custos.embalagem||0) / s.qtd;
+    return a + (custoCamisa + (s.lucroLiq||0) + custosExtrasCaixa + embalagemRateada) * s.qtd;
   }, 0);
 
   document.getElementById('rel-comprado').textContent  = fmt(totalComprado);
@@ -1685,9 +1687,10 @@ function renderRelatorio() {
       lucroCell = `<span style="color:${cor};font-weight:600">${fmt(lucroTotal)}</span>`;
       pctCell   = `<span style="color:${cor};font-weight:600">${pct.toFixed(1)}%</span>`;
 
-      // composição do custo (por peça) — a mesma conta usada no lucro líquido
+      // composição do custo (por peça) — a mesma conta usada no lucro líquido; a embalagem é
+      // uma só por venda, ratea entre as peças da mesma venda
       const custoCamisa  = custoMedioPonderado(m.modelo, m.cor, m.tamanho);
-      const custosExtras = (custos.dtf||0) + (custos.embalagem||0) + (custos.outros||0) + (custos.outros2||0);
+      const custosExtras = (custos.dtf||0) + (custos.outros||0) + (custos.outros2||0) + (custos.embalagem||0)/m.qtd;
       let taxaCanal = 0;
       if (m.canal === 'Shopee') taxaCanal = receita * 0.20 + 4.5;
       const custoTotal = (custoCamisa + custosExtras + taxaCanal) * m.qtd;
@@ -2156,6 +2159,7 @@ function calcularLucroLiq() {
   const preco   = parseFloat(document.getElementById('sai-preco').value)||0;
   const desconto= parseFloat(document.getElementById('sai-desconto').value)||0;
   const canal   = document.getElementById('sai-canal').value;
+  const qtd     = parseInt(document.getElementById('sai-qtd').value)||1;
   const painel  = document.getElementById('painel-lucro');
 
   if(!pecaKey||!preco){ painel.style.display='none'; return; }
@@ -2165,8 +2169,9 @@ function calcularLucroLiq() {
   // custo médio ponderado da camisa
   const custoCamisa = custoMedioPonderado(modelo, cor, tamanho);
 
-  // custos adicionais por peça
-  const custosExtras = (custos.dtf||0) + (custos.embalagem||0) + (custos.outros||0) + (custos.outros2||0);
+  // custos adicionais por peça: DTF/Outros/Outros 2 valem pra cada camiseta, mas a
+  // embalagem é uma só por pedido — se vende 2 juntas, rateia a embalagem entre as 2
+  const custosExtras = (custos.dtf||0) + (custos.outros||0) + (custos.outros2||0) + (custos.embalagem||0)/qtd;
 
   // receita líquida após desconto
   const receitaLiq = preco - desconto;
@@ -2444,9 +2449,10 @@ document.getElementById('btn-salvar-edit').addEventListener('click', ()=>{
 
   const [modelo,cor,tamanho] = pecaKey.split('||');
 
-  // recalcular lucro líquido com os novos valores
+  // recalcular lucro líquido com os novos valores — embalagem é uma só por pedido,
+  // ratea entre as peças da mesma venda
   const custoCamisa  = custoMedioPonderado(modelo, cor, tamanho);
-  const custosExtras = (custos.dtf||0)+(custos.embalagem||0)+(custos.outros||0)+(custos.outros2||0);
+  const custosExtras = (custos.dtf||0)+(custos.outros||0)+(custos.outros2||0)+(custos.embalagem||0)/qtd;
   const receitaLiq   = preco - desconto;
   let taxa=0, taxaFixa=0;
   if(canal==='Shopee'){ taxa=receitaLiq*0.20; taxaFixa=4.5; }
@@ -2511,6 +2517,7 @@ document.getElementById('sai-peca').addEventListener('change', atualizarDisponiv
 document.getElementById('sai-canal').addEventListener('change', calcularLucroLiq);
 document.getElementById('sai-preco').addEventListener('input', calcularLucroLiq);
 document.getElementById('sai-desconto').addEventListener('input', calcularLucroLiq);
+document.getElementById('sai-qtd').addEventListener('input', calcularLucroLiq);
 
 // ── PRÉVIA DE LUCRO: detalhes expansíveis ──────────────────
 document.getElementById('ll-custo-camisa-toggle').addEventListener('click', () => {

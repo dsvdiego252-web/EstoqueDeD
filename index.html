@@ -1157,6 +1157,18 @@
         <div class="chart-card-sub">Peças vendidas por tamanho, no período</div>
         <div id="chart-top-tamanhos"></div>
       </div>
+
+      <div class="chart-card">
+        <div class="chart-card-title">Top Estados</div>
+        <div class="chart-card-sub">Peças vendidas por estado, no período</div>
+        <div id="chart-top-estados"></div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-card-title">Top Clientes</div>
+        <div class="chart-card-sub">Peças vendidas por cliente, no período</div>
+        <div id="chart-top-clientes"></div>
+      </div>
     </div>
 
     <div class="section-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -1698,6 +1710,8 @@ function renderRelatorio() {
   renderRankingChart('chart-top-estampas', sais, 'estampa', { icon:'🎨', vazioRotulo:'Sem estampa' });
   renderRankingChart('chart-top-cores', sais, 'cor', { icon:'🎨' });
   renderRankingChart('chart-top-tamanhos', sais, 'tamanho', { icon:'📏' });
+  renderRankingChart('chart-top-estados', sais, 'estado', { icon:'📍', vazioRotulo:'Sem estado' });
+  renderRankingChart('chart-top-clientes', sais, 'cliente', { icon:'🧑', vazioRotulo:'Sem cliente' });
 
   let movs = [
     ...ents.map(e=>({...e,tipo:'Entrada',valor:e.custo})),
@@ -1945,7 +1959,7 @@ function attachRankTooltips(container) {
 }
 
 // clica num item do ranking TOP → filtra a tabela de Movimentações por ele (clicar de novo remove o filtro)
-const CAMPO_LABEL = { modelo: 'Modelo', estampa: 'Estampa', cor: 'Cor', tamanho: 'Tamanho' };
+const CAMPO_LABEL = { modelo: 'Modelo', estampa: 'Estampa', cor: 'Cor', tamanho: 'Tamanho', estado: 'Estado', cliente: 'Cliente' };
 function aplicarFiltroRank(campo, valor, label) {
   if (rankFiltro && rankFiltro.campo === campo && rankFiltro.valor === valor) {
     rankFiltro = null;

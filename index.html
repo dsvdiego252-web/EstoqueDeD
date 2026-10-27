@@ -738,6 +738,13 @@
 
   <!-- ABA ENTRADAS -->
   <div class="tab-content" id="tab-entradas">
+    <div class="chart-card" style="max-width:420px;">
+      <div class="chart-card-title">💰 Carteira</div>
+      <div class="chart-card-sub">Saldo disponível pra pagar entradas</div>
+      <div style="font-family:var(--font-display);font-size:34px;margin:8px 0 14px;" id="carteira-saldo">R$ 0,00</div>
+      <button class="btn btn-primary btn-sm" id="btn-abrir-aporte">+ Adicionar Aporte</button>
+    </div>
+
     <div class="section-title">Registrar Entrada de Camisas</div>
     <div class="form-grid">
       <div class="form-group">
@@ -790,6 +797,10 @@
         <label>Observação</label>
         <input type="text" id="ent-obs" placeholder="Opcional">
       </div>
+      <div class="form-group" style="display:flex;align-items:center;flex-direction:row;gap:8px;">
+        <input type="checkbox" id="ent-carteira" style="width:18px;height:18px;accent-color:var(--accent);">
+        <label for="ent-carteira" style="margin:0;cursor:pointer;">Pago da Carteira</label>
+      </div>
     </div>
     <button class="btn btn-primary" id="btn-add-entrada">+ Registrar Entrada</button>
 
@@ -803,6 +814,18 @@
       </tr></thead>
       <tbody id="tbody-entradas">
         <tr><td colspan="11" class="empty">Nenhuma entrada registrada.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <div class="section-title" style="margin-top:24px;">Histórico de Aportes na Carteira</div>
+    <div class="table-scroll">
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Valor</th><th>Observação</th><th></th>
+      </tr></thead>
+      <tbody id="tbody-aportes">
+        <tr><td colspan="4" class="empty">Nenhum aporte registrado.</td></tr>
       </tbody>
     </table>
     </div>
@@ -1317,6 +1340,31 @@
   </div>
 </div>
 
+<div id="modal-aporte" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:28px;width:min(420px,95vw);max-height:90vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div style="font-family:var(--font-display);font-size:22px;letter-spacing:2px;color:var(--accent);">💰 ADICIONAR APORTE</div>
+      <button onclick="fecharModalAporte()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Valor (R$)</label>
+      <input type="number" id="aporte-valor" step="0.01" min="0" placeholder="0,00">
+    </div>
+    <div class="form-group">
+      <label>Data</label>
+      <input type="date" id="aporte-data">
+    </div>
+    <div class="form-group">
+      <label>Observação</label>
+      <input type="text" id="aporte-obs" placeholder="Opcional">
+    </div>
+    <div style="display:flex;gap:12px;margin-top:16px;">
+      <button class="btn btn-primary" id="btn-salvar-aporte">💾 Salvar Aporte</button>
+      <button class="btn" style="background:var(--card);color:var(--text);border:1px solid var(--border);" onclick="fecharModalAporte()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
 
 // ── FIREBASE CONFIG ───────────────────────────────────────
@@ -1373,6 +1421,7 @@ let saidas   = [];
 let custos   = {"dtf":0,"embalagem":0,"outros":0,"outrosDesc":"","outros2":0,"outros2Desc":""};
 let investimentos = [];
 let ajustes = [];
+let aportesCarteira = []; // depósitos na carteira: {valor, data, obs} — entradas marcadas "Pago da Carteira" descontam daqui
 let _carregado = false;
 let rankFiltro = null; // { campo: 'modelo'|'estampa'|'cor'|'tamanho', valor: string } — filtro ativo ao clicar num ranking TOP
 let tipoFiltro = null; // 'Entrada' | 'Venda' — filtro ativo ao clicar nos cards Total Comprado/Total Vendido
@@ -1381,7 +1430,7 @@ let filtroSoEstoque = false; // esconde produtos sem nenhuma peça em estoque na
 // ── SALVAR NA NUVEM ───────────────────────────────────────
 async function salvar() {
   try {
-    await setDoc(DOC_REF, { entradas, saidas, custos, investimentos, ajustes, atualizado: new Date().toISOString() });
+    await setDoc(DOC_REF, { entradas, saidas, custos, investimentos, ajustes, aportesCarteira, atualizado: new Date().toISOString() });
   } catch(e) {
     console.error("Erro ao salvar:", e);
     showToast("⚠️ Erro ao salvar na nuvem.", true);
@@ -1399,6 +1448,7 @@ function iniciarSync() {
       custos   = d.custos   || {"dtf":0,"embalagem":0,"outros":0,"outrosDesc":"","outros2":0,"outros2Desc":""};
       investimentos = d.investimentos || [];
       ajustes  = d.ajustes  || [];
+      aportesCarteira = d.aportesCarteira || [];
     }
     if (!_carregado) {
       _carregado = true;
@@ -1418,6 +1468,7 @@ function iniciarSync() {
     custos   = JSON.parse(localStorage.getItem('est_custos')   || '{"dtf":0,"embalagem":0,"outros":0,"outrosDesc":"","outros2":0,"outros2Desc":""}');
     investimentos = JSON.parse(localStorage.getItem('est_investimentos') || '[]');
     ajustes  = JSON.parse(localStorage.getItem('est_ajustes')  || '[]');
+    aportesCarteira = JSON.parse(localStorage.getItem('est_aportes') || '[]');
     renderAll();
     renderCustos();
   });
@@ -1579,7 +1630,7 @@ function renderEntradas() {
     const idx = entradas.length-1-i;
     const frete = e.frete||0;
     return `<tr>
-      <td>${fmtData(e.data)}</td><td>${esc(e.modelo)}</td><td>${esc(e.cor)}</td>
+      <td>${fmtData(e.data)}${e.carteira?' <span title="Pago da Carteira">💰</span>':''}</td><td>${esc(e.modelo)}</td><td>${esc(e.cor)}</td>
       <td>${esc(e.tamanho)}</td><td>${esc(e.fornecedor)||'—'}</td><td><strong>${e.qtd}</strong></td>
       <td>${fmt(e.custo)}</td><td>${frete>0?fmt(frete):'—'}</td>
       <td>${fmt(e.custo*e.qtd+frete)}</td>
@@ -1604,6 +1655,32 @@ function renderInvestimentos() {
       <td>${fmt(inv.valor)}</td>
       <td style="color:var(--muted);font-size:12px">${esc(inv.obs)||'—'}</td>
       <td><button class="btn btn-danger btn-sm" onclick="delInvestimento(${idx})">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── CARTEIRA ───────────────────────────────────────────────
+// saldo = total de aportes - total de entradas marcadas "Pago da Carteira"
+function calcCarteiraSaldo() {
+  const totalAportes = aportesCarteira.reduce((a,p)=>a+Number(p.valor||0),0);
+  const totalGasto = entradas.filter(e=>e.carteira).reduce((a,e)=>a+Number(e.custo)*Number(e.qtd)+Number(e.frete||0),0);
+  return totalAportes - totalGasto;
+}
+function renderCarteira() {
+  const saldo = calcCarteiraSaldo();
+  const el = document.getElementById('carteira-saldo');
+  el.textContent = fmt(saldo);
+  el.style.color = saldo>=0 ? 'var(--success)' : 'var(--danger)';
+
+  const tb = document.getElementById('tbody-aportes');
+  if(!aportesCarteira.length){ tb.innerHTML='<tr><td colspan="4" class="empty">Nenhum aporte registrado.</td></tr>'; return; }
+  tb.innerHTML = [...aportesCarteira].reverse().map((p,i)=>{
+    const idx = aportesCarteira.length-1-i;
+    return `<tr>
+      <td>${fmtData(p.data)}</td>
+      <td style="color:var(--success);font-weight:600">${fmt(p.valor)}</td>
+      <td style="color:var(--muted);font-size:12px">${esc(p.obs)||'—'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="delAporte(${idx})">✕</button></td>
     </tr>`;
   }).join('');
 }
@@ -2227,6 +2304,18 @@ function fecharModalAjuste() {
 }
 window.fecharModalAjuste = fecharModalAjuste;
 
+// ── APORTE NA CARTEIRA ──────────────────────────────────────
+function abrirModalAporte() {
+  document.getElementById('aporte-valor').value = '';
+  document.getElementById('aporte-data').value = hoje();
+  document.getElementById('aporte-obs').value = '';
+  document.getElementById('modal-aporte').style.display = 'flex';
+}
+function fecharModalAporte() {
+  document.getElementById('modal-aporte').style.display = 'none';
+}
+window.fecharModalAporte = fecharModalAporte;
+
 // ── RENOMEAR COR ───────────────────────────────────────────
 // corrige nomes de cor digitados errado (ex: "Catamelo" → "Caramelo") em
 // entradas, vendas e ajustes já registrados — usa o Modelo/Cor filtrados
@@ -2334,11 +2423,12 @@ document.getElementById('btn-add-entrada').addEventListener('click',()=>{
   const frete       = parseFloat(document.getElementById('ent-frete').value)||0;
   const data        = document.getElementById('ent-data').value;
   const obs         = document.getElementById('ent-obs').value.trim();
+  const carteira    = document.getElementById('ent-carteira').checked;
   if(!modelo||!cor||!tamanho||!qtd||qtd<1||!data){
     alert('Preencha todos os campos obrigatórios (Modelo, Cor, Tamanho, Quantidade e Data).');
     return;
   }
-  entradas.push({modelo,cor,tamanho,fornecedor,qtd,custo,frete,data,obs});
+  entradas.push({modelo,cor,tamanho,fornecedor,qtd,custo,frete,carteira,data,obs});
   salvar();
   renderAll();
   document.getElementById('ent-modelo').value='';
@@ -2349,6 +2439,7 @@ document.getElementById('btn-add-entrada').addEventListener('click',()=>{
   document.getElementById('ent-custo').value='';
   document.getElementById('ent-frete').value='';
   document.getElementById('ent-obs').value='';
+  document.getElementById('ent-carteira').checked=false;
   document.getElementById('ent-data').value=hoje();
 });
 
@@ -2421,6 +2512,26 @@ document.getElementById('btn-confirmar-renomear-cor').addEventListener('click', 
   fecharModalRenomearCor();
   showToast(`✅ ${count} registro(s) renomeado(s) para "${novoNome}".`);
 });
+
+document.getElementById('btn-abrir-aporte').addEventListener('click', abrirModalAporte);
+document.getElementById('btn-salvar-aporte').addEventListener('click', () => {
+  const valor = parseFloat(document.getElementById('aporte-valor').value)||0;
+  const data = document.getElementById('aporte-data').value;
+  const obs = document.getElementById('aporte-obs').value.trim();
+  if (!valor || valor<=0 || !data) {
+    alert('Preencha: Valor e Data.');
+    return;
+  }
+  aportesCarteira.push({valor, data, obs});
+  salvar();
+  renderAll();
+  fecharModalAporte();
+  showToast('✅ Aporte registrado!');
+});
+window.delAporte = function(i) {
+  if(!confirm('Remover este aporte?')) return;
+  aportesCarteira.splice(i,1); salvar(); renderAll();
+};
 
 // ── ADD SAIDA ─────────────────────────────────────────────
 document.getElementById('btn-add-saida').addEventListener('click',()=>{
@@ -2663,6 +2774,7 @@ function renderAll() {
   atualizarFiltrosEstoque();
   renderEstoque(document.getElementById('busca-estoque').value);
   renderEntradas();
+  renderCarteira();
   renderSaidas();
   renderInvestimentos();
   renderAjustes();
@@ -2725,7 +2837,7 @@ document.getElementById('btn-salvar-custos').addEventListener('click',()=>{
 
 // ── HELPERS MODAL BACKUP ─────────────────────────────────
 function abrirModalSalvar() {
-  const dados = { entradas, saidas, custos, investimentos, ajustes, salvo_em: new Date().toISOString() };
+  const dados = { entradas, saidas, custos, investimentos, ajustes, aportesCarteira, salvo_em: new Date().toISOString() };
   document.getElementById('backup-textarea').value = JSON.stringify(dados, null, 2);
   document.getElementById('modo-salvar').style.display    = 'block';
   document.getElementById('modo-restaurar').style.display = 'none';
@@ -2749,7 +2861,7 @@ function fecharModalBackup() {
 
 // ── SALVAR BACKUP ─────────────────────────────────────────
 document.getElementById('btn-salvar-backup').addEventListener('click', () => {
-  const dados = { entradas, saidas, custos, investimentos, ajustes, salvo_em: new Date().toISOString() };
+  const dados = { entradas, saidas, custos, investimentos, ajustes, aportesCarteira, salvo_em: new Date().toISOString() };
   const json  = JSON.stringify(dados, null, 2);
   const nome  = `backup_estoque_${hoje()}.json`;
 
@@ -2812,6 +2924,7 @@ document.getElementById('btn-confirmar-restaurar').addEventListener('click', () 
     if (dados.custos) custos = dados.custos;
     investimentos = Array.isArray(dados.investimentos) ? dados.investimentos : [];
     ajustes       = Array.isArray(dados.ajustes) ? dados.ajustes : [];
+    aportesCarteira = Array.isArray(dados.aportesCarteira) ? dados.aportesCarteira : [];
     salvar();
     renderAll();
     renderCustos();
@@ -2837,6 +2950,7 @@ document.getElementById('input-importar').addEventListener('change', function() 
       if (dados.custos) custos = dados.custos;
       investimentos = Array.isArray(dados.investimentos) ? dados.investimentos : [];
       ajustes       = Array.isArray(dados.ajustes) ? dados.ajustes : [];
+      aportesCarteira = Array.isArray(dados.aportesCarteira) ? dados.aportesCarteira : [];
       salvar(); renderAll(); renderCustos();
       fecharModalBackup();
       showToast('✅ Backup carregado com sucesso!');

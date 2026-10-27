@@ -698,6 +698,7 @@
   <button class="tab-btn" data-tab="entradas">⬆️ Entradas</button>
   <button class="tab-btn" data-tab="saidas">⬇️ Vendas</button>
   <button class="tab-btn" data-tab="custos">💰 Custos</button>
+  <button class="tab-btn" data-tab="financeiro">💳 Financeiro</button>
   <button class="tab-btn" data-tab="investimento">📢 Investimento</button>
   <button class="tab-btn" data-tab="relatorio">📊 Relatório</button>
 </div>
@@ -738,13 +739,6 @@
 
   <!-- ABA ENTRADAS -->
   <div class="tab-content" id="tab-entradas">
-    <div class="chart-card" style="max-width:420px;">
-      <div class="chart-card-title">💰 Carteira</div>
-      <div class="chart-card-sub">Saldo disponível pra pagar entradas</div>
-      <div style="font-family:var(--font-display);font-size:34px;margin:8px 0 14px;" id="carteira-saldo">R$ 0,00</div>
-      <button class="btn btn-primary btn-sm" id="btn-abrir-aporte">+ Adicionar Aporte</button>
-    </div>
-
     <div class="section-title">Registrar Entrada de Camisas</div>
     <div class="form-grid">
       <div class="form-group">
@@ -818,17 +812,6 @@
     </table>
     </div>
 
-    <div class="section-title" style="margin-top:24px;">Histórico de Aportes na Carteira</div>
-    <div class="table-scroll">
-    <table>
-      <thead><tr>
-        <th>Data</th><th>Valor</th><th>Observação</th><th></th>
-      </tr></thead>
-      <tbody id="tbody-aportes">
-        <tr><td colspan="4" class="empty">Nenhum aporte registrado.</td></tr>
-      </tbody>
-    </table>
-    </div>
   </div>
 
   <!-- ABA VENDAS -->
@@ -1040,6 +1023,75 @@
     <div style="max-width:700px;background:var(--card);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:8px;padding:16px 20px;margin-top:4px;">
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);margin-bottom:6px;">Custo Adicional Total por Peça</div>
       <div style="font-family:var(--font-display);font-size:36px;color:var(--accent);" id="res-total">R$ 0,00</div>
+    </div>
+  </div>
+
+  <!-- ABA FINANCEIRO -->
+  <div class="tab-content" id="tab-financeiro">
+    <div class="chart-card" style="max-width:420px;">
+      <div class="chart-card-title">💰 Carteira</div>
+      <div class="chart-card-sub">Saldo disponível pra pagar entradas e despesas</div>
+      <div style="font-family:var(--font-display);font-size:34px;margin:8px 0 14px;" id="carteira-saldo">R$ 0,00</div>
+      <button class="btn btn-primary btn-sm" id="btn-abrir-aporte">+ Adicionar Aporte</button>
+    </div>
+
+    <hr class="divider">
+    <div class="section-title">Registrar Saída da Carteira</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px;">Despesas que não são entrada de camisas: DTF, etiqueta, retirada de sócio, etc. O valor é descontado do saldo da carteira.</p>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Categoria</label>
+        <select id="desp-categoria">
+          <option value="">Selecione</option>
+          <option>DTF</option>
+          <option>Etiqueta</option>
+          <option>Retirada Sócio</option>
+          <option>Embalagem</option>
+          <option>Outro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Descrição</label>
+        <input type="text" id="desp-descricao" placeholder="Opcional">
+      </div>
+      <div class="form-group">
+        <label>Valor (R$)</label>
+        <input type="number" id="desp-valor" placeholder="0,00" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Data</label>
+        <input type="date" id="desp-data">
+      </div>
+      <div class="form-group">
+        <label>Observação</label>
+        <input type="text" id="desp-obs" placeholder="Opcional">
+      </div>
+    </div>
+    <button class="btn btn-primary" id="btn-add-despesa">+ Registrar Saída</button>
+
+    <hr class="divider">
+    <div class="section-title">Histórico de Saídas da Carteira</div>
+    <div class="table-scroll">
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th>Obs.</th><th></th>
+      </tr></thead>
+      <tbody id="tbody-despesas">
+        <tr><td colspan="6" class="empty">Nenhuma saída registrada.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <div class="section-title" style="margin-top:24px;">Histórico de Aportes na Carteira</div>
+    <div class="table-scroll">
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Valor</th><th>Observação</th><th></th>
+      </tr></thead>
+      <tbody id="tbody-aportes">
+        <tr><td colspan="4" class="empty">Nenhum aporte registrado.</td></tr>
+      </tbody>
+    </table>
     </div>
   </div>
 
@@ -1422,6 +1474,7 @@ let custos   = {"dtf":0,"embalagem":0,"outros":0,"outrosDesc":"","outros2":0,"ou
 let investimentos = [];
 let ajustes = [];
 let aportesCarteira = []; // depósitos na carteira: {valor, data, obs} — entradas marcadas "Pago da Carteira" descontam daqui
+let despesasCarteira = []; // saídas da carteira que não são entrada de camisas: {categoria, descricao, valor, data, obs}
 let _carregado = false;
 let rankFiltro = null; // { campo: 'modelo'|'estampa'|'cor'|'tamanho', valor: string } — filtro ativo ao clicar num ranking TOP
 let tipoFiltro = null; // 'Entrada' | 'Venda' — filtro ativo ao clicar nos cards Total Comprado/Total Vendido
@@ -1430,7 +1483,7 @@ let filtroSoEstoque = false; // esconde produtos sem nenhuma peça em estoque na
 // ── SALVAR NA NUVEM ───────────────────────────────────────
 async function salvar() {
   try {
-    await setDoc(DOC_REF, { entradas, saidas, custos, investimentos, ajustes, aportesCarteira, atualizado: new Date().toISOString() });
+    await setDoc(DOC_REF, { entradas, saidas, custos, investimentos, ajustes, aportesCarteira, despesasCarteira, atualizado: new Date().toISOString() });
   } catch(e) {
     console.error("Erro ao salvar:", e);
     showToast("⚠️ Erro ao salvar na nuvem.", true);
@@ -1449,6 +1502,7 @@ function iniciarSync() {
       investimentos = d.investimentos || [];
       ajustes  = d.ajustes  || [];
       aportesCarteira = d.aportesCarteira || [];
+      despesasCarteira = d.despesasCarteira || [];
     }
     if (!_carregado) {
       _carregado = true;
@@ -1469,6 +1523,7 @@ function iniciarSync() {
     investimentos = JSON.parse(localStorage.getItem('est_investimentos') || '[]');
     ajustes  = JSON.parse(localStorage.getItem('est_ajustes')  || '[]');
     aportesCarteira = JSON.parse(localStorage.getItem('est_aportes') || '[]');
+    despesasCarteira = JSON.parse(localStorage.getItem('est_despesas') || '[]');
     renderAll();
     renderCustos();
   });
@@ -1500,6 +1555,7 @@ document.getElementById('hDate').textContent = new Date().toLocaleDateString('pt
 document.getElementById('ent-data').value = hoje();
 document.getElementById('sai-data').value = hoje();
 document.getElementById('inv-data').value = hoje();
+document.getElementById('desp-data').value = hoje();
 
 // ── ESTOQUE CALC ─────────────────────────────────────────
 function calcEstoque() {
@@ -1660,11 +1716,12 @@ function renderInvestimentos() {
 }
 
 // ── CARTEIRA ───────────────────────────────────────────────
-// saldo = total de aportes - total de entradas marcadas "Pago da Carteira"
+// saldo = total de aportes - total de entradas marcadas "Pago da Carteira" - total de saídas (despesas)
 function calcCarteiraSaldo() {
   const totalAportes = aportesCarteira.reduce((a,p)=>a+Number(p.valor||0),0);
   const totalGasto = entradas.filter(e=>e.carteira).reduce((a,e)=>a+Number(e.custo)*Number(e.qtd)+Number(e.frete||0),0);
-  return totalAportes - totalGasto;
+  const totalDespesas = despesasCarteira.reduce((a,d)=>a+Number(d.valor||0),0);
+  return totalAportes - totalGasto - totalDespesas;
 }
 function renderCarteira() {
   const saldo = calcCarteiraSaldo();
@@ -1672,17 +1729,37 @@ function renderCarteira() {
   el.textContent = fmt(saldo);
   el.style.color = saldo>=0 ? 'var(--success)' : 'var(--danger)';
 
-  const tb = document.getElementById('tbody-aportes');
-  if(!aportesCarteira.length){ tb.innerHTML='<tr><td colspan="4" class="empty">Nenhum aporte registrado.</td></tr>'; return; }
-  tb.innerHTML = [...aportesCarteira].reverse().map((p,i)=>{
-    const idx = aportesCarteira.length-1-i;
-    return `<tr>
-      <td>${fmtData(p.data)}</td>
-      <td style="color:var(--success);font-weight:600">${fmt(p.valor)}</td>
-      <td style="color:var(--muted);font-size:12px">${esc(p.obs)||'—'}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="delAporte(${idx})">✕</button></td>
-    </tr>`;
-  }).join('');
+  const tbA = document.getElementById('tbody-aportes');
+  if(!aportesCarteira.length){
+    tbA.innerHTML='<tr><td colspan="4" class="empty">Nenhum aporte registrado.</td></tr>';
+  } else {
+    tbA.innerHTML = [...aportesCarteira].reverse().map((p,i)=>{
+      const idx = aportesCarteira.length-1-i;
+      return `<tr>
+        <td>${fmtData(p.data)}</td>
+        <td style="color:var(--success);font-weight:600">${fmt(p.valor)}</td>
+        <td style="color:var(--muted);font-size:12px">${esc(p.obs)||'—'}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="delAporte(${idx})">✕</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  const tbD = document.getElementById('tbody-despesas');
+  if(!despesasCarteira.length){
+    tbD.innerHTML='<tr><td colspan="6" class="empty">Nenhuma saída registrada.</td></tr>';
+  } else {
+    tbD.innerHTML = [...despesasCarteira].reverse().map((d,i)=>{
+      const idx = despesasCarteira.length-1-i;
+      return `<tr>
+        <td>${fmtData(d.data)}</td>
+        <td>${esc(d.categoria)||'—'}</td>
+        <td>${esc(d.descricao)||'—'}</td>
+        <td style="color:var(--danger);font-weight:600">${fmt(d.valor)}</td>
+        <td style="color:var(--muted);font-size:12px">${esc(d.obs)||'—'}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="delDespesa(${idx})">✕</button></td>
+      </tr>`;
+    }).join('');
+  }
 }
 
 // ── RENDER TABELA AJUSTES DE ESTOQUE ─────────────────────
@@ -2533,6 +2610,32 @@ window.delAporte = function(i) {
   aportesCarteira.splice(i,1); salvar(); renderAll();
 };
 
+// ── SAÍDA DA CARTEIRA (DESPESA) ──────────────────────────────
+document.getElementById('btn-add-despesa').addEventListener('click', () => {
+  const categoria = document.getElementById('desp-categoria').value;
+  const descricao = document.getElementById('desp-descricao').value.trim();
+  const valor = parseFloat(document.getElementById('desp-valor').value)||0;
+  const data = document.getElementById('desp-data').value;
+  const obs = document.getElementById('desp-obs').value.trim();
+  if (!categoria || !valor || valor<=0 || !data) {
+    alert('Preencha: Categoria, Valor e Data.');
+    return;
+  }
+  despesasCarteira.push({categoria, descricao, valor, data, obs});
+  salvar();
+  renderAll();
+  document.getElementById('desp-categoria').value='';
+  document.getElementById('desp-descricao').value='';
+  document.getElementById('desp-valor').value='';
+  document.getElementById('desp-obs').value='';
+  document.getElementById('desp-data').value=hoje();
+  showToast('✅ Saída registrada!');
+});
+window.delDespesa = function(i) {
+  if(!confirm('Remover esta saída?')) return;
+  despesasCarteira.splice(i,1); salvar(); renderAll();
+};
+
 // ── ADD SAIDA ─────────────────────────────────────────────
 document.getElementById('btn-add-saida').addEventListener('click',()=>{
   const pecaKey = document.getElementById('sai-peca').value;
@@ -2837,7 +2940,7 @@ document.getElementById('btn-salvar-custos').addEventListener('click',()=>{
 
 // ── HELPERS MODAL BACKUP ─────────────────────────────────
 function abrirModalSalvar() {
-  const dados = { entradas, saidas, custos, investimentos, ajustes, aportesCarteira, salvo_em: new Date().toISOString() };
+  const dados = { entradas, saidas, custos, investimentos, ajustes, aportesCarteira, despesasCarteira, salvo_em: new Date().toISOString() };
   document.getElementById('backup-textarea').value = JSON.stringify(dados, null, 2);
   document.getElementById('modo-salvar').style.display    = 'block';
   document.getElementById('modo-restaurar').style.display = 'none';
@@ -2861,7 +2964,7 @@ function fecharModalBackup() {
 
 // ── SALVAR BACKUP ─────────────────────────────────────────
 document.getElementById('btn-salvar-backup').addEventListener('click', () => {
-  const dados = { entradas, saidas, custos, investimentos, ajustes, aportesCarteira, salvo_em: new Date().toISOString() };
+  const dados = { entradas, saidas, custos, investimentos, ajustes, aportesCarteira, despesasCarteira, salvo_em: new Date().toISOString() };
   const json  = JSON.stringify(dados, null, 2);
   const nome  = `backup_estoque_${hoje()}.json`;
 
@@ -2925,6 +3028,7 @@ document.getElementById('btn-confirmar-restaurar').addEventListener('click', () 
     investimentos = Array.isArray(dados.investimentos) ? dados.investimentos : [];
     ajustes       = Array.isArray(dados.ajustes) ? dados.ajustes : [];
     aportesCarteira = Array.isArray(dados.aportesCarteira) ? dados.aportesCarteira : [];
+    despesasCarteira = Array.isArray(dados.despesasCarteira) ? dados.despesasCarteira : [];
     salvar();
     renderAll();
     renderCustos();
@@ -2951,6 +3055,7 @@ document.getElementById('input-importar').addEventListener('change', function() 
       investimentos = Array.isArray(dados.investimentos) ? dados.investimentos : [];
       ajustes       = Array.isArray(dados.ajustes) ? dados.ajustes : [];
       aportesCarteira = Array.isArray(dados.aportesCarteira) ? dados.aportesCarteira : [];
+      despesasCarteira = Array.isArray(dados.despesasCarteira) ? dados.despesasCarteira : [];
       salvar(); renderAll(); renderCustos();
       fecharModalBackup();
       showToast('✅ Backup carregado com sucesso!');

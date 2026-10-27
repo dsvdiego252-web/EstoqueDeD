@@ -866,9 +866,9 @@
       </div>
 
       <div class="form-group">
-        <label>Usuário</label>
-        <input type="text" id="sai-usuario" placeholder="Quem vendeu" list="usuarios-list">
-        <datalist id="usuarios-list"></datalist>
+        <label>Cliente</label>
+        <input type="text" id="sai-cliente" placeholder="Nome do cliente" list="clientes-list">
+        <datalist id="clientes-list"></datalist>
       </div>
 
       <div class="form-group">
@@ -951,7 +951,7 @@
     <div class="table-scroll">
     <table>
       <thead><tr>
-        <th>Data</th><th>Peça</th><th>Estampa</th><th>Canal</th><th>Usuário</th><th>Estado</th>
+        <th>Data</th><th>Peça</th><th>Estampa</th><th>Canal</th><th>Cliente</th><th>Estado</th>
         <th>Qtd</th><th>Preço Unit.</th><th>Desconto</th><th>Total</th><th>Lucro Líq.</th><th>% L.Líq.</th><th>Obs.</th><th></th>
       </tr></thead>
       <tbody id="tbody-saidas">
@@ -1220,8 +1220,8 @@
         <input type="date" id="edit-data">
       </div>
       <div class="form-group">
-        <label>Usuário</label>
-        <input type="text" id="edit-usuario" list="usuarios-list">
+        <label>Cliente</label>
+        <input type="text" id="edit-cliente" list="clientes-list">
       </div>
       <div class="form-group">
         <label>Estado (UF)</label>
@@ -1631,7 +1631,7 @@ function renderSaidas() {
       <td style="font-size:12px">${esc(s.modelo)} · ${esc(s.cor)} · ${esc(s.tamanho)}</td>
       <td>${esc(s.estampa)||'—'}</td>
       <td>${esc(s.canal)||'—'}</td>
-      <td>${esc(s.usuario)||'—'}</td>
+      <td>${esc(s.cliente)||'—'}</td>
       <td>${esc(s.estado)||'—'}</td>
       <td><strong>${s.qtd}</strong></td>
       <td>${fmt(s.preco)}</td>
@@ -2131,10 +2131,10 @@ function atualizarSelectVendas() {
   const dlForn = document.getElementById('fornecedores-list');
   if(dlForn) dlForn.innerHTML = fornecedores.map(f=>`<option value="${esc(f)}">`).join('');
 
-  // datalist de usuários (vendedores) já usados nas vendas
-  const usuarios = [...new Set(saidas.map(s=>s.usuario).filter(Boolean))].sort();
-  const dlUsu = document.getElementById('usuarios-list');
-  if(dlUsu) dlUsu.innerHTML = usuarios.map(u=>`<option value="${esc(u)}">`).join('');
+  // datalist de clientes já usados nas vendas
+  const clientes = [...new Set(saidas.map(s=>s.cliente).filter(Boolean))].sort();
+  const dlCli = document.getElementById('clientes-list');
+  if(dlCli) dlCli.innerHTML = clientes.map(c=>`<option value="${esc(c)}">`).join('');
 
   // filtrar peças pelo fornecedor selecionado
   const fornFiltro = selForn.value;
@@ -2415,7 +2415,7 @@ document.getElementById('btn-add-saida').addEventListener('click',()=>{
   const preco   = parseFloat(document.getElementById('sai-preco').value)||0;
   const desconto= parseFloat(document.getElementById('sai-desconto').value)||0;
   const data    = document.getElementById('sai-data').value;
-  const usuario = document.getElementById('sai-usuario').value.trim();
+  const cliente = document.getElementById('sai-cliente').value.trim();
   const estado  = document.getElementById('sai-estado').value;
   const obs     = document.getElementById('sai-obs').value.trim();
 
@@ -2432,7 +2432,7 @@ document.getElementById('btn-add-saida').addEventListener('click',()=>{
   const calc = calcularLucroLiq();
   const lucroLiq = calc ? calc.lucro : 0;
 
-  saidas.push({modelo,cor,tamanho,estampa,canal,qtd,preco,desconto,usuario,estado,lucroLiq,data,obs});
+  saidas.push({modelo,cor,tamanho,estampa,canal,qtd,preco,desconto,cliente,estado,lucroLiq,data,obs});
   salvar();
   renderAll();
 
@@ -2442,7 +2442,7 @@ document.getElementById('btn-add-saida').addEventListener('click',()=>{
   document.getElementById('sai-qtd').value='';
   document.getElementById('sai-preco').value='';
   document.getElementById('sai-desconto').value='';
-  document.getElementById('sai-usuario').value='';
+  document.getElementById('sai-cliente').value='';
   document.getElementById('sai-estado').value='';
   document.getElementById('sai-obs').value='';
   document.getElementById('sai-data').value=hoje();
@@ -2496,7 +2496,7 @@ window.abrirModal = function(idx) {
   document.getElementById('edit-preco').value     = s.preco;
   document.getElementById('edit-desconto').value  = s.desconto||0;
   document.getElementById('edit-data').value      = s.data;
-  document.getElementById('edit-usuario').value   = s.usuario||'';
+  document.getElementById('edit-cliente').value   = s.cliente||'';
   document.getElementById('edit-estado').value    = s.estado||'';
   document.getElementById('edit-obs').value       = s.obs||'';
 
@@ -2522,7 +2522,7 @@ document.getElementById('btn-salvar-edit').addEventListener('click', ()=>{
   const preco    = parseFloat(document.getElementById('edit-preco').value)||0;
   const desconto = parseFloat(document.getElementById('edit-desconto').value)||0;
   const data     = document.getElementById('edit-data').value;
-  const usuario  = document.getElementById('edit-usuario').value.trim();
+  const cliente  = document.getElementById('edit-cliente').value.trim();
   const estado   = document.getElementById('edit-estado').value;
   const obs      = document.getElementById('edit-obs').value.trim();
 
@@ -2542,7 +2542,7 @@ document.getElementById('btn-salvar-edit').addEventListener('click', ()=>{
   if(canal==='Shopee'){ taxa=receitaLiq*0.20; taxaFixa=4.5; }
   const lucroLiq = receitaLiq - custoCamisa - custosExtras - taxa - taxaFixa;
 
-  saidas[idx] = {modelo,cor,tamanho,estampa,canal,qtd,preco,desconto,usuario,estado,lucroLiq,data,obs};
+  saidas[idx] = {modelo,cor,tamanho,estampa,canal,qtd,preco,desconto,cliente,estado,lucroLiq,data,obs};
   salvar();
   renderAll();
   fecharModal();

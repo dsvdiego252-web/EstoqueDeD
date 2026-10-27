@@ -412,6 +412,9 @@
   }
   .stat-box .lbl { font-size: 11px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; }
   .stat-box .val { font-family: var(--font-display); font-size: 30px; }
+  .stat-clicavel { cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+  .stat-clicavel:hover, .stat-clicavel:focus-visible { border-color: var(--accent); outline: none; }
+  .stat-clicavel.stat-ativo { border-color: var(--accent); background: rgba(232,197,71,0.08); }
 
   /* GRÁFICOS DO RELATÓRIO */
   .chart-card {
@@ -863,6 +866,26 @@
       </div>
 
       <div class="form-group">
+        <label>Usuário</label>
+        <input type="text" id="sai-usuario" placeholder="Quem vendeu" list="usuarios-list">
+        <datalist id="usuarios-list"></datalist>
+      </div>
+
+      <div class="form-group">
+        <label>Estado (UF)</label>
+        <select id="sai-estado">
+          <option value="">Selecione</option>
+          <option>AC</option><option>AL</option><option>AP</option><option>AM</option>
+          <option>BA</option><option>CE</option><option>DF</option><option>ES</option>
+          <option>GO</option><option>MA</option><option>MT</option><option>MS</option>
+          <option>MG</option><option>PA</option><option>PB</option><option>PR</option>
+          <option>PE</option><option>PI</option><option>RJ</option><option>RN</option>
+          <option>RS</option><option>RO</option><option>RR</option><option>SC</option>
+          <option>SP</option><option>SE</option><option>TO</option>
+        </select>
+      </div>
+
+      <div class="form-group">
         <label>Observação</label>
         <input type="text" id="sai-obs" placeholder="Opcional">
       </div>
@@ -928,11 +951,11 @@
     <div class="table-scroll">
     <table>
       <thead><tr>
-        <th>Data</th><th>Peça</th><th>Estampa</th><th>Canal</th>
+        <th>Data</th><th>Peça</th><th>Estampa</th><th>Canal</th><th>Usuário</th><th>Estado</th>
         <th>Qtd</th><th>Preço Unit.</th><th>Desconto</th><th>Total</th><th>Lucro Líq.</th><th>% L.Líq.</th><th>Obs.</th><th></th>
       </tr></thead>
       <tbody id="tbody-saidas">
-        <tr><td colspan="12" class="empty">Nenhuma venda registrada.</td></tr>
+        <tr><td colspan="14" class="empty">Nenhuma venda registrada.</td></tr>
       </tbody>
     </table>
     </div>
@@ -1072,11 +1095,11 @@
     </div>
 
     <div class="stat-row">
-      <div class="stat-box">
+      <div class="stat-box stat-clicavel" tabindex="0" title="Toque para filtrar as compras em Movimentações" onclick="aplicarFiltroTipo('Entrada')">
         <div class="lbl">Total Comprado (R$)</div>
         <div class="val" id="rel-comprado" style="color:var(--accent2)">R$ 0,00</div>
       </div>
-      <div class="stat-box">
+      <div class="stat-box stat-clicavel" tabindex="0" title="Toque para filtrar as vendas em Movimentações" onclick="aplicarFiltroTipo('Venda')">
         <div class="lbl">Total Vendido (R$)</div>
         <div class="val" id="rel-vendido" style="color:var(--success)">R$ 0,00</div>
       </div>
@@ -1195,6 +1218,23 @@
       <div class="form-group">
         <label>Data</label>
         <input type="date" id="edit-data">
+      </div>
+      <div class="form-group">
+        <label>Usuário</label>
+        <input type="text" id="edit-usuario" list="usuarios-list">
+      </div>
+      <div class="form-group">
+        <label>Estado (UF)</label>
+        <select id="edit-estado">
+          <option value="">Selecione</option>
+          <option>AC</option><option>AL</option><option>AP</option><option>AM</option>
+          <option>BA</option><option>CE</option><option>DF</option><option>ES</option>
+          <option>GO</option><option>MA</option><option>MT</option><option>MS</option>
+          <option>MG</option><option>PA</option><option>PB</option><option>PR</option>
+          <option>PE</option><option>PI</option><option>RJ</option><option>RN</option>
+          <option>RS</option><option>RO</option><option>RR</option><option>SC</option>
+          <option>SP</option><option>SE</option><option>TO</option>
+        </select>
       </div>
       <div class="form-group">
         <label>Observação</label>
@@ -1321,6 +1361,7 @@ let investimentos = [];
 let ajustes = [];
 let _carregado = false;
 let rankFiltro = null; // { campo: 'modelo'|'estampa'|'cor'|'tamanho', valor: string } — filtro ativo ao clicar num ranking TOP
+let tipoFiltro = null; // 'Entrada' | 'Venda' — filtro ativo ao clicar nos cards Total Comprado/Total Vendido
 let filtroSoEstoque = false; // esconde produtos sem nenhuma peça em estoque na aba Estoque
 
 // ── SALVAR NA NUVEM ───────────────────────────────────────
@@ -1575,7 +1616,7 @@ function renderAjustes() {
 // ── RENDER TABELA SAIDAS ─────────────────────────────────
 function renderSaidas() {
   const tb = document.getElementById('tbody-saidas');
-  if(!saidas.length){ tb.innerHTML='<tr><td colspan="12" class="empty">Nenhuma venda registrada.</td></tr>'; return; }
+  if(!saidas.length){ tb.innerHTML='<tr><td colspan="14" class="empty">Nenhuma venda registrada.</td></tr>'; return; }
   tb.innerHTML = [...saidas].reverse().map((s,i)=>{
     const idx = saidas.length-1-i;
     const desc  = s.desconto||0;
@@ -1590,6 +1631,8 @@ function renderSaidas() {
       <td style="font-size:12px">${esc(s.modelo)} · ${esc(s.cor)} · ${esc(s.tamanho)}</td>
       <td>${esc(s.estampa)||'—'}</td>
       <td>${esc(s.canal)||'—'}</td>
+      <td>${esc(s.usuario)||'—'}</td>
+      <td>${esc(s.estado)||'—'}</td>
       <td><strong>${s.qtd}</strong></td>
       <td>${fmt(s.preco)}</td>
       <td>${desc>0?fmt(desc):'—'}</td>
@@ -1667,13 +1710,20 @@ function renderRelatorio() {
     movs = movs.filter(m => m.tipo === 'Venda' && (m[rankFiltro.campo]||'').toString().trim() === rankFiltro.valor);
     chip.style.display = '';
     chip.innerHTML = `${esc(CAMPO_LABEL[rankFiltro.campo]||rankFiltro.campo)}: <strong>${esc(rankFiltro.label)}</strong> <button type="button" aria-label="Remover filtro" onclick="limparFiltroRank()">✕</button>`;
+  } else if (tipoFiltro) {
+    movs = movs.filter(m => m.tipo === tipoFiltro);
+    chip.style.display = '';
+    chip.innerHTML = `Mostrando: <strong>${tipoFiltro === 'Entrada' ? 'Compras' : 'Vendas'}</strong> <button type="button" aria-label="Remover filtro" onclick="limparFiltroTipo()">✕</button>`;
   } else {
     chip.style.display = 'none';
     chip.innerHTML = '';
   }
 
+  document.getElementById('rel-comprado').parentElement.classList.toggle('stat-ativo', tipoFiltro === 'Entrada');
+  document.getElementById('rel-vendido').parentElement.classList.toggle('stat-ativo', tipoFiltro === 'Venda');
+
   const tb = document.getElementById('tbody-relatorio');
-  if(!movs.length){ tb.innerHTML=`<tr><td colspan="12" class="empty">Nenhuma movimentação${rankFiltro?' para este filtro':' no período'}.</td></tr>`; return; }
+  if(!movs.length){ tb.innerHTML=`<tr><td colspan="12" class="empty">Nenhuma movimentação${(rankFiltro||tipoFiltro)?' para este filtro':' no período'}.</td></tr>`; return; }
   tb.innerHTML = movs.map(m=>{
     let lucroCell = '<span style="color:var(--muted)">—</span>';
     let pctCell   = '<span style="color:var(--muted)">—</span>';
@@ -1901,6 +1951,7 @@ function aplicarFiltroRank(campo, valor, label) {
     rankFiltro = null;
   } else {
     rankFiltro = { campo, valor, label };
+    tipoFiltro = null;
   }
   renderRelatorio();
 }
@@ -1908,6 +1959,24 @@ function limparFiltroRank() {
   rankFiltro = null;
   renderRelatorio();
 }
+window.limparFiltroRank = limparFiltroRank;
+
+// clica no card Total Comprado/Total Vendido → filtra Movimentações só por entradas ou só por vendas
+function aplicarFiltroTipo(tipo) {
+  if (tipoFiltro === tipo) {
+    tipoFiltro = null;
+  } else {
+    tipoFiltro = tipo;
+    rankFiltro = null;
+  }
+  renderRelatorio();
+}
+window.aplicarFiltroTipo = aplicarFiltroTipo;
+function limparFiltroTipo() {
+  tipoFiltro = null;
+  renderRelatorio();
+}
+window.limparFiltroTipo = limparFiltroTipo;
 
 // tooltip com a composição do custo (camisa + DTF/embalagem/outros + taxa do canal)
 function attachCustoTooltips(container) {
@@ -2062,6 +2131,11 @@ function atualizarSelectVendas() {
   const dlForn = document.getElementById('fornecedores-list');
   if(dlForn) dlForn.innerHTML = fornecedores.map(f=>`<option value="${esc(f)}">`).join('');
 
+  // datalist de usuários (vendedores) já usados nas vendas
+  const usuarios = [...new Set(saidas.map(s=>s.usuario).filter(Boolean))].sort();
+  const dlUsu = document.getElementById('usuarios-list');
+  if(dlUsu) dlUsu.innerHTML = usuarios.map(u=>`<option value="${esc(u)}">`).join('');
+
   // filtrar peças pelo fornecedor selecionado
   const fornFiltro = selForn.value;
 
@@ -2135,6 +2209,7 @@ function abrirModalAjuste(modelo, cor, tamanho) {
 function fecharModalAjuste() {
   document.getElementById('modal-ajuste').style.display = 'none';
 }
+window.fecharModalAjuste = fecharModalAjuste;
 
 // ── RENOMEAR COR ───────────────────────────────────────────
 // corrige nomes de cor digitados errado (ex: "Catamelo" → "Caramelo") em
@@ -2152,6 +2227,7 @@ function abrirModalRenomearCor() {
 function fecharModalRenomearCor() {
   document.getElementById('modal-renomear-cor').style.display = 'none';
 }
+window.fecharModalRenomearCor = fecharModalRenomearCor;
 
 // ── CALCULAR LUCRO LÍQUIDO (prévia) ──────────────────────
 function calcularLucroLiq() {
@@ -2339,6 +2415,8 @@ document.getElementById('btn-add-saida').addEventListener('click',()=>{
   const preco   = parseFloat(document.getElementById('sai-preco').value)||0;
   const desconto= parseFloat(document.getElementById('sai-desconto').value)||0;
   const data    = document.getElementById('sai-data').value;
+  const usuario = document.getElementById('sai-usuario').value.trim();
+  const estado  = document.getElementById('sai-estado').value;
   const obs     = document.getElementById('sai-obs').value.trim();
 
   if(!pecaKey||!qtd||qtd<1||!preco||!data){
@@ -2354,7 +2432,7 @@ document.getElementById('btn-add-saida').addEventListener('click',()=>{
   const calc = calcularLucroLiq();
   const lucroLiq = calc ? calc.lucro : 0;
 
-  saidas.push({modelo,cor,tamanho,estampa,canal,qtd,preco,desconto,lucroLiq,data,obs});
+  saidas.push({modelo,cor,tamanho,estampa,canal,qtd,preco,desconto,usuario,estado,lucroLiq,data,obs});
   salvar();
   renderAll();
 
@@ -2364,6 +2442,8 @@ document.getElementById('btn-add-saida').addEventListener('click',()=>{
   document.getElementById('sai-qtd').value='';
   document.getElementById('sai-preco').value='';
   document.getElementById('sai-desconto').value='';
+  document.getElementById('sai-usuario').value='';
+  document.getElementById('sai-estado').value='';
   document.getElementById('sai-obs').value='';
   document.getElementById('sai-data').value=hoje();
   document.getElementById('painel-lucro').style.display='none';
@@ -2416,6 +2496,8 @@ window.abrirModal = function(idx) {
   document.getElementById('edit-preco').value     = s.preco;
   document.getElementById('edit-desconto').value  = s.desconto||0;
   document.getElementById('edit-data').value      = s.data;
+  document.getElementById('edit-usuario').value   = s.usuario||'';
+  document.getElementById('edit-estado').value    = s.estado||'';
   document.getElementById('edit-obs').value       = s.obs||'';
 
   const modal = document.getElementById('modal-edit');
@@ -2440,6 +2522,8 @@ document.getElementById('btn-salvar-edit').addEventListener('click', ()=>{
   const preco    = parseFloat(document.getElementById('edit-preco').value)||0;
   const desconto = parseFloat(document.getElementById('edit-desconto').value)||0;
   const data     = document.getElementById('edit-data').value;
+  const usuario  = document.getElementById('edit-usuario').value.trim();
+  const estado   = document.getElementById('edit-estado').value;
   const obs      = document.getElementById('edit-obs').value.trim();
 
   if(!pecaKey||!qtd||qtd<1||!preco||!data){
@@ -2458,7 +2542,7 @@ document.getElementById('btn-salvar-edit').addEventListener('click', ()=>{
   if(canal==='Shopee'){ taxa=receitaLiq*0.20; taxaFixa=4.5; }
   const lucroLiq = receitaLiq - custoCamisa - custosExtras - taxa - taxaFixa;
 
-  saidas[idx] = {modelo,cor,tamanho,estampa,canal,qtd,preco,desconto,lucroLiq,data,obs};
+  saidas[idx] = {modelo,cor,tamanho,estampa,canal,qtd,preco,desconto,usuario,estado,lucroLiq,data,obs};
   salvar();
   renderAll();
   fecharModal();

@@ -1716,12 +1716,19 @@ function renderInvestimentos() {
 }
 
 // ── CARTEIRA ───────────────────────────────────────────────
-// saldo = total de aportes - total de entradas marcadas "Pago da Carteira" - total de saídas (despesas)
+// saldo = aportes + dinheiro recebido nas vendas - entradas marcadas "Pago da Carteira" - saídas (despesas)
+// o valor recebido por venda é: custo da camisa + lucro líquido + DTF + embalagem (rateada) + outros custos
+// (não entra Outros Custos 2 nem a taxa do canal, que já fica descontada dentro do lucro líquido)
 function calcCarteiraSaldo() {
   const totalAportes = aportesCarteira.reduce((a,p)=>a+Number(p.valor||0),0);
   const totalGasto = entradas.filter(e=>e.carteira).reduce((a,e)=>a+Number(e.custo)*Number(e.qtd)+Number(e.frete||0),0);
   const totalDespesas = despesasCarteira.reduce((a,d)=>a+Number(d.valor||0),0);
-  return totalAportes - totalGasto - totalDespesas;
+  const totalRecebidoVendas = saidas.reduce((a,s) => {
+    const custoCamisa = custoMedioPonderado(s.modelo, s.cor, s.tamanho);
+    const custosExtras = (custos.dtf||0) + (custos.outros||0) + (custos.embalagem||0)/s.qtd;
+    return a + (custoCamisa + (s.lucroLiq||0) + custosExtras) * s.qtd;
+  }, 0);
+  return totalAportes + totalRecebidoVendas - totalGasto - totalDespesas;
 }
 function renderCarteira() {
   const saldo = calcCarteiraSaldo();

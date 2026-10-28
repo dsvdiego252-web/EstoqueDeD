@@ -1862,13 +1862,22 @@ function renderRelatorio() {
   document.getElementById('rel-pct-liq').textContent   = pctLucroLiq.toFixed(1)+'%';
   document.getElementById('rel-pct-liq').style.color   = pctLucroLiq>=0?'var(--accent)':'var(--danger)';
 
-  renderChartFluxo(ents, sais, filtro);
-  renderRankingChart('chart-top-modelos', sais, 'modelo', { icon:'👕' });
-  renderRankingChart('chart-top-estampas', sais, 'estampa', { icon:'🎨', vazioRotulo:'Sem estampa' });
-  renderRankingChart('chart-top-cores', sais, 'cor', { icon:'🎨' });
-  renderRankingChart('chart-top-tamanhos', sais, 'tamanho', { icon:'📏' });
-  renderRankingChart('chart-top-estados', sais, 'estado', { icon:'📍', vazioRotulo:'Sem estado' });
-  renderRankingChart('chart-top-clientes', sais, 'cliente', { icon:'🧑', vazioRotulo:'Sem cliente' });
+  // clicar numa barra de qualquer ranking filtra os outros gráficos por aquele valor (cross-filter);
+  // o próprio gráfico clicado continua mostrando todas as barras, pra dar pra trocar ou remover o filtro
+  const saisFiltradasRank = rankFiltro
+    ? sais.filter(s => (s[rankFiltro.campo]||'').toString().trim() === rankFiltro.valor)
+    : sais;
+  function saisPara(campo) {
+    return (rankFiltro && rankFiltro.campo !== campo) ? saisFiltradasRank : sais;
+  }
+
+  renderChartFluxo(ents, saisFiltradasRank, filtro);
+  renderRankingChart('chart-top-modelos', saisPara('modelo'), 'modelo', { icon:'👕' });
+  renderRankingChart('chart-top-estampas', saisPara('estampa'), 'estampa', { icon:'🎨', vazioRotulo:'Sem estampa' });
+  renderRankingChart('chart-top-cores', saisPara('cor'), 'cor', { icon:'🎨' });
+  renderRankingChart('chart-top-tamanhos', saisPara('tamanho'), 'tamanho', { icon:'📏' });
+  renderRankingChart('chart-top-estados', saisPara('estado'), 'estado', { icon:'📍', vazioRotulo:'Sem estado' });
+  renderRankingChart('chart-top-clientes', saisPara('cliente'), 'cliente', { icon:'🧑', vazioRotulo:'Sem cliente' });
 
   let movs = [
     ...ents.map(e=>({...e,tipo:'Entrada',valor:e.custo})),

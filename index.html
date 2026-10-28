@@ -1841,15 +1841,9 @@ function renderRelatorio() {
   const totalLucroLiq  = sais.reduce((a,b)=>a+(b.lucroLiq||0)*b.qtd,0);
   const pctLucroLiq    = totalVendido>0 ? (totalLucroLiq/totalVendido*100) : 0;
 
-  // saldo em caixa: custo da camisa + lucro líquido + DTF + embalagem + outros, por peça vendida.
-  // Não entra Outros Custos 2 (não deve reduzir o caixa) nem a taxa do canal (já descontada
-  // dentro do lucro líquido e não volta pro caixa). A embalagem é uma só por venda, não por peça.
-  const custosExtrasCaixa = (custos.dtf||0) + (custos.outros||0);
-  const saldoCaixa = sais.reduce((a,s) => {
-    const custoCamisa = custoMedioPonderado(s.modelo, s.cor, s.tamanho);
-    const embalagemRateada = (custos.embalagem||0) / s.qtd;
-    return a + (custoCamisa + (s.lucroLiq||0) + custosExtrasCaixa + embalagemRateada) * s.qtd;
-  }, 0);
+  // saldo em caixa: o mesmo saldo da Carteira (Financeiro) — aportes menos entradas
+  // marcadas "Pago da Carteira" menos as outras saídas da carteira.
+  const saldoCaixa = calcCarteiraSaldo();
 
   document.getElementById('rel-comprado').textContent  = fmt(totalComprado);
   document.getElementById('rel-vendido').textContent   = fmt(totalVendido);

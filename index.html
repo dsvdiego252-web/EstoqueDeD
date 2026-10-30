@@ -341,6 +341,7 @@
     align-items: center;
     min-width: 52px;
     cursor: pointer;
+    position: relative;
   }
   .size-pill:hover, .size-pill:focus-visible { border-color: var(--accent); outline: none; }
   .size-pill .sz { font-size: 10px; color: var(--muted); letter-spacing: 1px; margin-bottom: 2px; }
@@ -352,6 +353,15 @@
   .size-pill.low .qty { color: var(--danger); }
   .size-pill.ok .qty { color: var(--success); }
   .size-pill.zero .qty { color: var(--muted); }
+  .size-pill .pill-check {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 14px;
+    height: 14px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
 
   /* FILTROS */
   .filter-bar {
@@ -718,9 +728,28 @@
         <option value="">Todas as cores</option>
       </select>
       <button class="btn btn-sm filtro-toggle" id="btn-filtro-com-estoque">📦 Só com estoque</button>
+      <button class="btn btn-sm filtro-toggle" id="btn-filtro-sem-estoque">🚫 Sem estoque</button>
       <button class="btn btn-primary btn-sm" id="btn-abrir-ajuste">⚖️ Ajustar Estoque</button>
       <button class="btn btn-sm" id="btn-renomear-cor" style="background:var(--card);color:var(--text);border:1px solid var(--border);">✏️ Renomear Cor</button>
     </div>
+
+    <div id="simulacao-compra-wrap" style="display:none;margin-bottom:20px;">
+      <div class="section-title" style="margin-top:0;">🛒 Simulação de Compra — Repor Estoque</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">Marque as peças sem estoque nos cards abaixo para simular quanto custaria repor.</p>
+      <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Produto</th><th>Qtd a comprar</th><th>Custo Unit. (R$)</th><th>Subtotal</th><th></th>
+        </tr></thead>
+        <tbody id="tbody-simulacao-compra"></tbody>
+      </table>
+      </div>
+      <div style="max-width:320px;background:var(--card);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:8px;padding:14px 18px;margin-top:10px;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);margin-bottom:4px;">Total da Compra</div>
+        <div style="font-family:var(--font-display);font-size:28px;color:var(--accent);" id="sim-total">R$ 0,00</div>
+      </div>
+    </div>
+
     <div class="estoque-grid" id="estoque-grid">
       <div class="empty"><div class="empty-icon">👕</div>Nenhum produto ainda.<br>Registre uma entrada para começar.</div>
     </div>
@@ -1554,6 +1583,8 @@ let _carregado = false;
 let rankFiltro = null; // { campo: 'modelo'|'estampa'|'cor'|'tamanho', valor: string } — filtro ativo ao clicar num ranking TOP
 let tipoFiltro = null; // 'Entrada' | 'Venda' — filtro ativo ao clicar nos cards Total Comprado/Total Vendido
 let filtroSoEstoque = false; // esconde produtos sem nenhuma peça em estoque na aba Estoque
+let filtroSemEstoque = false; // mostra só produtos com algum tamanho zerado/negativo na aba Estoque
+let simulacaoCompra = []; // {modelo,cor,tamanho,qtd,custo} — simulação de compra pra repor peças sem estoque (não é salvo)
 
 // ── SALVAR NA NUVEM ───────────────────────────────────────
 async function salvar() {
@@ -1731,6 +1762,9 @@ function renderEstoque(filtro='') {
   if (filtroSoEstoque) {
     keys = keys.filter(k => Object.values(grupos[k].tamanhos).some(q => q > 0));
   }
+  if (filtroSemEstoque) {
+    keys = keys.filter(k => Object.values(grupos[k].tamanhos).some(q => q <= 0));
+  }
   if(!keys.length){
     grid.innerHTML = '<div class="empty"><div class="empty-icon">👕</div>Nenhum produto encontrado.</div>';
     return;
@@ -1752,7 +1786,9 @@ function renderEstoque(filtro='') {
       .sort((a,b)=>(ordem.indexOf(a[0])-(ordem.indexOf(b[0]))))
       .map(([sz,q])=>{
         const cls = q<=0?'zero':q<=3?'low':'ok';
-        return `<div class="size-pill ${cls}" tabindex="0" title="Toque para ajustar o estoque" data-modelo="${esc(g.modelo)}" data-cor="${esc(g.cor)}" data-tamanho="${esc(sz)}"><span class="sz">${sz}</span><span class="qty">${Math.max(0,q)}</span></div>`;
+        const marcado = simulacaoCompra.some(i=>i.modelo===g.modelo&&i.cor===g.cor&&i.tamanho===sz);
+        const checkbox = q<=0 ? `<input type="checkbox" class="pill-check" title="Marcar para simular compra" data-modelo="${esc(g.modelo)}" data-cor="${esc(g.cor)}" data-tamanho="${esc(sz)}" data-qtd="${q}"${marcado?' checked':''}>` : '';
+        return `<div class="size-pill ${cls}" tabindex="0" title="Toque para ajustar o estoque" data-modelo="${esc(g.modelo)}" data-cor="${esc(g.cor)}" data-tamanho="${esc(sz)}">${checkbox}<span class="sz">${sz}</span><span class="qty">${Math.max(0,q)}</span></div>`;
       }).join('');
 
     html += `<div class="ecard">
@@ -1766,6 +1802,55 @@ function renderEstoque(filtro='') {
   });
   grid.innerHTML = html || '<div class="empty">Nenhum item com estoque.</div>';
 }
+
+// ── SIMULAÇÃO DE COMPRA (repor estoque zerado) ────────────
+function toggleSimulacaoItem(modelo, cor, tamanho, qtdAtual, marcado) {
+  const idx = simulacaoCompra.findIndex(i => i.modelo===modelo && i.cor===cor && i.tamanho===tamanho);
+  if (marcado) {
+    if (idx === -1) {
+      const custoSugerido = custoMedioPonderado(modelo, cor, tamanho);
+      simulacaoCompra.push({ modelo, cor, tamanho, qtd: Math.max(1, -qtdAtual), custo: custoSugerido || 0 });
+    }
+  } else if (idx !== -1) {
+    simulacaoCompra.splice(idx, 1);
+  }
+  renderSimulacaoCompra();
+}
+
+function renderSimulacaoCompra() {
+  const wrap = document.getElementById('simulacao-compra-wrap');
+  const tb = document.getElementById('tbody-simulacao-compra');
+  if (!simulacaoCompra.length) {
+    wrap.style.display = 'none';
+    tb.innerHTML = '';
+    document.getElementById('sim-total').textContent = fmt(0);
+    return;
+  }
+  wrap.style.display = '';
+  let total = 0;
+  tb.innerHTML = simulacaoCompra.map((item, i) => {
+    const subtotal = (Number(item.qtd)||0) * (Number(item.custo)||0);
+    total += subtotal;
+    return `<tr>
+      <td>${esc(item.modelo)} · ${esc(item.cor)} · ${esc(item.tamanho)}</td>
+      <td><input type="number" min="1" step="1" value="${item.qtd}" class="sim-qtd" data-idx="${i}" style="width:70px;"></td>
+      <td><input type="number" min="0" step="0.01" value="${item.custo}" class="sim-custo" data-idx="${i}" style="width:90px;"></td>
+      <td class="sim-subtotal">${fmt(subtotal)}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="removerSimulacaoItem(${i})">✕</button></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('sim-total').textContent = fmt(total);
+}
+
+window.removerSimulacaoItem = function(i) {
+  const item = simulacaoCompra[i];
+  simulacaoCompra.splice(i, 1);
+  renderSimulacaoCompra();
+  if (item) {
+    const chk = document.querySelector(`.pill-check[data-modelo="${CSS.escape(item.modelo)}"][data-cor="${CSS.escape(item.cor)}"][data-tamanho="${CSS.escape(item.tamanho)}"]`);
+    if (chk) chk.checked = false;
+  }
+};
 
 // ── RENDER TABELA ENTRADAS ───────────────────────────────
 function renderEntradas() {
@@ -2651,9 +2736,28 @@ document.getElementById('btn-add-investimento').addEventListener('click',()=>{
 document.getElementById('btn-abrir-ajuste').addEventListener('click', () => abrirModalAjuste());
 document.getElementById('ajuste-peca').addEventListener('change', atualizarAjusteAtual);
 document.getElementById('estoque-grid').addEventListener('click', (e) => {
+  if (e.target.closest('.pill-check')) return; // o checkbox de simulação de compra tem o próprio handler
   const pill = e.target.closest('.size-pill');
   if (!pill) return;
   abrirModalAjuste(pill.dataset.modelo, pill.dataset.cor, pill.dataset.tamanho);
+});
+document.getElementById('estoque-grid').addEventListener('change', (e) => {
+  const chk = e.target.closest('.pill-check');
+  if (!chk) return;
+  toggleSimulacaoItem(chk.dataset.modelo, chk.dataset.cor, chk.dataset.tamanho, Number(chk.dataset.qtd), chk.checked);
+});
+document.getElementById('tbody-simulacao-compra').addEventListener('input', (e) => {
+  const idx = e.target.dataset.idx;
+  if (idx === undefined) return;
+  const item = simulacaoCompra[idx];
+  if (!item) return;
+  if (e.target.classList.contains('sim-qtd'))   item.qtd   = parseFloat(e.target.value) || 0;
+  if (e.target.classList.contains('sim-custo')) item.custo = parseFloat(e.target.value) || 0;
+  const subtotal = (Number(item.qtd)||0) * (Number(item.custo)||0);
+  e.target.closest('tr').querySelector('.sim-subtotal').textContent = fmt(subtotal);
+  let total = 0;
+  simulacaoCompra.forEach(it => total += (Number(it.qtd)||0) * (Number(it.custo)||0));
+  document.getElementById('sim-total').textContent = fmt(total);
 });
 document.getElementById('btn-salvar-ajuste').addEventListener('click', () => {
   const key = document.getElementById('ajuste-peca').value;
@@ -2921,6 +3025,15 @@ document.getElementById('busca-estoque').addEventListener('input',e=>{
 });
 document.getElementById('btn-filtro-com-estoque').addEventListener('click', () => {
   filtroSoEstoque = !filtroSoEstoque;
+  if (filtroSoEstoque) filtroSemEstoque = false;
+  document.getElementById('btn-filtro-com-estoque').classList.toggle('active', filtroSoEstoque);
+  document.getElementById('btn-filtro-sem-estoque').classList.toggle('active', filtroSemEstoque);
+  renderEstoque(document.getElementById('busca-estoque').value);
+});
+document.getElementById('btn-filtro-sem-estoque').addEventListener('click', () => {
+  filtroSemEstoque = !filtroSemEstoque;
+  if (filtroSemEstoque) filtroSoEstoque = false;
+  document.getElementById('btn-filtro-sem-estoque').classList.toggle('active', filtroSemEstoque);
   document.getElementById('btn-filtro-com-estoque').classList.toggle('active', filtroSoEstoque);
   renderEstoque(document.getElementById('busca-estoque').value);
 });

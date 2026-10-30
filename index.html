@@ -1659,6 +1659,20 @@ function getEstoqueAgrupado() {
     if(!grupos[gk]) grupos[gk] = {modelo,cor,tamanhos:{}};
     grupos[gk].tamanhos[tamanho] = v;
   });
+
+  // toda cor de um mesmo modelo mostra os mesmos tamanhos — se uma cor nunca teve
+  // movimento num tamanho que outra cor do mesmo modelo já teve, entra com 0
+  const tamanhosPorModelo = {};
+  Object.values(grupos).forEach(g => {
+    if (!tamanhosPorModelo[g.modelo]) tamanhosPorModelo[g.modelo] = new Set();
+    Object.keys(g.tamanhos).forEach(sz => tamanhosPorModelo[g.modelo].add(sz));
+  });
+  Object.values(grupos).forEach(g => {
+    tamanhosPorModelo[g.modelo].forEach(sz => {
+      if (!(sz in g.tamanhos)) g.tamanhos[sz] = 0;
+    });
+  });
+
   return grupos;
 }
 

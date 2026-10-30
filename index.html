@@ -2442,17 +2442,24 @@ function atualizarSelectVendas() {
 // ── AJUSTE DE ESTOQUE ─────────────────────────────────────
 // lista todos os produtos já conhecidos (de entradas e vendas), mesmo com estoque zerado ou negativo
 function atualizarSelectAjuste() {
-  const est = calcEstoque();
+  // usa getEstoqueAgrupado (não calcEstoque direto) porque ela já preenche com 0 os
+  // tamanhos que outra cor do mesmo modelo já usou — senão um tamanho sem movimento
+  // própria não vira opção e o select fica vazio ao clicar no pill dele
+  const grupos = getEstoqueAgrupado();
   const sel = document.getElementById('ajuste-peca');
   const prev = sel.value;
   sel.innerHTML = '<option value="">Selecione o produto</option>';
-  Object.keys(est)
-    .sort((a,b)=>a.localeCompare(b))
-    .forEach(k => {
-      const [modelo,cor,tamanho] = k.split('||');
-      const txt = `${modelo} · ${cor} · ${tamanho}  (${est[k]} em estoque)`;
-      sel.innerHTML += `<option value="${esc(k)}"${k===prev?' selected':''}>${esc(txt)}</option>`;
+  const opcoes = [];
+  Object.values(grupos).forEach(g => {
+    Object.keys(g.tamanhos).forEach(tamanho => {
+      opcoes.push({ key: `${g.modelo}||${g.cor}||${tamanho}`, modelo: g.modelo, cor: g.cor, tamanho, qtd: g.tamanhos[tamanho] });
     });
+  });
+  opcoes.sort((a,b)=>a.key.localeCompare(b.key));
+  opcoes.forEach(o => {
+    const txt = `${o.modelo} · ${o.cor} · ${o.tamanho}  (${o.qtd} em estoque)`;
+    sel.innerHTML += `<option value="${esc(o.key)}"${o.key===prev?' selected':''}>${esc(txt)}</option>`;
+  });
 }
 
 function atualizarAjusteAtual() {

@@ -698,6 +698,7 @@
   <button class="tab-btn" data-tab="entradas">⬆️ Entradas</button>
   <button class="tab-btn" data-tab="saidas">⬇️ Vendas</button>
   <button class="tab-btn" data-tab="custos">💰 Custos</button>
+  <button class="tab-btn" data-tab="calculadora">🧮 Calculadora de Custos</button>
   <button class="tab-btn" data-tab="financeiro">💳 Financeiro</button>
   <button class="tab-btn" data-tab="investimento">📢 Investimento</button>
   <button class="tab-btn" data-tab="relatorio">📊 Relatório</button>
@@ -1024,6 +1025,80 @@
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);margin-bottom:6px;">Custo Adicional Total por Peça</div>
       <div style="font-family:var(--font-display);font-size:36px;color:var(--accent);" id="res-total">R$ 0,00</div>
     </div>
+  </div>
+
+  <!-- ABA CALCULADORA DE CUSTOS -->
+  <div class="tab-content" id="tab-calculadora">
+    <div class="section-title">Calculadora de Custos e Preço de Venda</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px;">Mude qualquer campo abaixo (markup, valor de venda, lucro ou % de lucro) que os outros se recalculam sozinhos.</p>
+
+    <div class="form-grid" style="max-width:700px;">
+      <div class="form-group">
+        <label>Custo da Camiseta (R$)</label>
+        <input type="number" id="calc-custo-camisa" placeholder="0,00" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Custo do DTF (R$)</label>
+        <input type="number" id="calc-dtf" placeholder="0,00" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Custo da Embalagem (R$)</label>
+        <input type="number" id="calc-embalagem" placeholder="0,00" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Outros Custos (R$)</label>
+        <input type="number" id="calc-outros" placeholder="0,00" step="0.01" min="0">
+      </div>
+    </div>
+
+    <div class="form-grid" style="max-width:700px;margin-top:4px;">
+      <div class="form-group">
+        <label>Markup (%)</label>
+        <input type="number" id="calc-markup" placeholder="Ex: 100" step="0.01">
+      </div>
+      <div class="form-group">
+        <label>Canal de Venda</label>
+        <select id="calc-canal">
+          <option value="">Selecione</option>
+          <option>Shopee</option>
+          <option>Loja Física</option>
+          <option>WhatsApp</option>
+          <option>Instagram</option>
+          <option>Mercado Livre</option>
+          <option>Outro</option>
+        </select>
+      </div>
+    </div>
+
+    <hr class="divider">
+    <div class="section-title">Resultado</div>
+    <div class="form-grid" style="max-width:700px;">
+      <div class="form-group">
+        <label>Valor de Venda (R$)</label>
+        <input type="number" id="calc-valor-venda" placeholder="0,00" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Lucro Líquido (R$)</label>
+        <input type="number" id="calc-lucro" placeholder="0,00" step="0.01">
+      </div>
+      <div class="form-group">
+        <label>% Lucro Líquido</label>
+        <input type="number" id="calc-pct-lucro" placeholder="0,00" step="0.01">
+      </div>
+    </div>
+
+    <div class="stat-row" style="max-width:700px;margin-top:4px;">
+      <div class="stat-box">
+        <div class="lbl">Custo Total</div>
+        <div class="val" id="calc-custo-total" style="color:var(--accent2);font-size:24px">R$ 0,00</div>
+      </div>
+      <div class="stat-box">
+        <div class="lbl">Taxa do Canal</div>
+        <div class="val" id="calc-taxa-canal" style="color:var(--accent2);font-size:24px">R$ 0,00</div>
+      </div>
+    </div>
+
+    <button class="btn btn-sm" id="btn-limpar-calculadora" style="margin-top:16px;background:var(--card);border:1px solid var(--border);color:var(--text);">🧹 Limpar</button>
   </div>
 
   <!-- ABA FINANCEIRO -->
@@ -2815,6 +2890,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
     if(btn.dataset.tab==='relatorio') renderRelatorio();
     if(btn.dataset.tab==='saidas') atualizarSelectVendas();
+    if(btn.dataset.tab==='calculadora') recalcCalculadora();
   });
 });
 
@@ -2946,6 +3022,90 @@ document.getElementById('btn-salvar-custos').addEventListener('click',()=>{
 
 ['cust-dtf','cust-embalagem','cust-outros','cust-outros-desc','cust-outros2','cust-outros2-desc'].forEach(id=>{
   document.getElementById(id).addEventListener('input', atualizarResumoCustos);
+});
+
+// ── CALCULADORA DE CUSTOS ─────────────────────────────────
+// campo que está "no comando": o usuário editou ele por último, e os outros se
+// recalculam em volta dele. markup → gera o valor de venda; valor de venda, lucro e
+// % lucro também podem ser editados diretamente, e aí a calculadora acha o valor de
+// venda necessário pra bater o lucro/percentual pedido.
+let calcModo = 'markup';
+function calcCustoTotalCalc() {
+  const camisa = parseFloat(document.getElementById('calc-custo-camisa').value) || 0;
+  const dtf    = parseFloat(document.getElementById('calc-dtf').value) || 0;
+  const emb    = parseFloat(document.getElementById('calc-embalagem').value) || 0;
+  const outros = parseFloat(document.getElementById('calc-outros').value) || 0;
+  return camisa + dtf + emb + outros;
+}
+function calcTaxaCanalInfo(canal) {
+  // { pct: fração (0.20 = 20%), fixa: valor fixo em R$ } — só Shopee cobra, igual na venda
+  if (canal === 'Shopee') return { pct: 0.20, fixa: 4.5 };
+  return { pct: 0, fixa: 0 };
+}
+function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
+
+function recalcCalculadora() {
+  const custoTotal = calcCustoTotalCalc();
+  const canal = document.getElementById('calc-canal').value;
+  const taxaInfo = calcTaxaCanalInfo(canal);
+  const ativo = document.activeElement ? document.activeElement.id : null;
+
+  let markup      = parseFloat(document.getElementById('calc-markup').value) || 0;
+  let valorVenda   = parseFloat(document.getElementById('calc-valor-venda').value) || 0;
+  let lucro        = parseFloat(document.getElementById('calc-lucro').value) || 0;
+  let pctLucro     = parseFloat(document.getElementById('calc-pct-lucro').value) || 0;
+
+  if (calcModo === 'markup') {
+    valorVenda = custoTotal * (1 + markup / 100);
+  } else if (calcModo === 'venda') {
+    markup = custoTotal > 0 ? (valorVenda / custoTotal - 1) * 100 : 0;
+  } else if (calcModo === 'lucro') {
+    // valorVenda - custoTotal - (valorVenda*taxaPct + taxaFixa) = lucro
+    const denom = 1 - taxaInfo.pct;
+    if (denom > 0.0001) valorVenda = (lucro + custoTotal + taxaInfo.fixa) / denom;
+    markup = custoTotal > 0 ? (valorVenda / custoTotal - 1) * 100 : 0;
+  } else if (calcModo === 'pct') {
+    // valorVenda - custoTotal - (valorVenda*taxaPct + taxaFixa) = (pctLucro/100)*valorVenda
+    const denom = 1 - taxaInfo.pct - pctLucro / 100;
+    if (denom > 0.0001) valorVenda = (custoTotal + taxaInfo.fixa) / denom;
+    markup = custoTotal > 0 ? (valorVenda / custoTotal - 1) * 100 : 0;
+  }
+
+  if (valorVenda < 0 || !isFinite(valorVenda)) valorVenda = 0;
+  const taxaValor = valorVenda * taxaInfo.pct + taxaInfo.fixa;
+  lucro = valorVenda - custoTotal - taxaValor;
+  pctLucro = valorVenda > 0 ? (lucro / valorVenda * 100) : 0;
+
+  // não sobrescreve o campo que o usuário está digitando agora
+  if (ativo !== 'calc-markup')      document.getElementById('calc-markup').value      = round2(markup);
+  if (ativo !== 'calc-valor-venda') document.getElementById('calc-valor-venda').value = round2(valorVenda);
+  if (ativo !== 'calc-lucro')       document.getElementById('calc-lucro').value       = round2(lucro);
+  if (ativo !== 'calc-pct-lucro')   document.getElementById('calc-pct-lucro').value   = round2(pctLucro);
+
+  document.getElementById('calc-custo-total').textContent = fmt(custoTotal);
+  const elTaxa = document.getElementById('calc-taxa-canal');
+  elTaxa.textContent = canal === 'Shopee' ? `${fmt(taxaValor)} (20% + R$ 4,50)` : fmt(0);
+
+  const inLucro = document.getElementById('calc-lucro');
+  inLucro.style.color = lucro >= 0 ? 'var(--success)' : 'var(--danger)';
+}
+
+['calc-custo-camisa','calc-dtf','calc-embalagem','calc-outros'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', recalcCalculadora);
+});
+document.getElementById('calc-canal').addEventListener('change', recalcCalculadora);
+document.getElementById('calc-markup').addEventListener('input', () => { calcModo = 'markup'; recalcCalculadora(); });
+document.getElementById('calc-valor-venda').addEventListener('input', () => { calcModo = 'venda'; recalcCalculadora(); });
+document.getElementById('calc-lucro').addEventListener('input', () => { calcModo = 'lucro'; recalcCalculadora(); });
+document.getElementById('calc-pct-lucro').addEventListener('input', () => { calcModo = 'pct'; recalcCalculadora(); });
+
+document.getElementById('btn-limpar-calculadora').addEventListener('click', () => {
+  ['calc-custo-camisa','calc-dtf','calc-embalagem','calc-outros','calc-markup','calc-valor-venda','calc-lucro','calc-pct-lucro'].forEach(id=>{
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('calc-canal').value = '';
+  calcModo = 'markup';
+  recalcCalculadora();
 });
 
 // ── HELPERS MODAL BACKUP ─────────────────────────────────

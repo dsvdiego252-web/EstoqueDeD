@@ -781,7 +781,27 @@
       <button class="btn btn-sm" id="btn-pdf-pedido" style="background:var(--accent2);color:#1a1200;border:none;font-weight:700;">📄 Gerar PDF</button>
     </div>
 
-    <div class="table-scroll">
+    <div class="estoque-toolbar" style="margin-top:10px;">
+      <select id="pedido-filtro-modelo" class="filtro-control">
+        <option value="">Todos os modelos</option>
+      </select>
+      <select id="pedido-filtro-cor" class="filtro-control">
+        <option value="">Todas as cores</option>
+      </select>
+    </div>
+
+    <div class="section-title" style="margin-top:20px;font-size:15px;">+ Adicionar Item ao Pedido</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:10px;">Pode adicionar qualquer produto, mesmo um que já tem estoque.</p>
+    <div class="estoque-toolbar">
+      <select id="pedido-add-peca" class="filtro-control busca-full">
+        <option value="">Selecione o produto</option>
+      </select>
+      <input type="number" id="pedido-add-qtd" class="filtro-control" placeholder="Quantidade" min="1" style="max-width:120px;">
+      <input type="number" id="pedido-add-custo" class="filtro-control" placeholder="Custo Unit. (R$)" step="0.01" min="0" style="max-width:140px;">
+      <button class="btn btn-primary btn-sm" id="btn-add-item-pedido">+ Adicionar</button>
+    </div>
+
+    <div class="table-scroll" style="margin-top:16px;">
     <table>
       <thead><tr>
         <th>Modelo</th><th>Cor</th><th>Tamanho</th><th>Estoque Atual</th><th>Qtd a Pedir</th><th>Custo Unit. (R$)</th><th>Subtotal</th><th></th>
@@ -1920,17 +1940,48 @@ function gerarSugestaoPedido() {
   showToast('✅ Sugestão gerada!');
 }
 
+// os selects de filtro só listam modelo/cor que estão de fato no pedido atual
+function atualizarFiltrosPedido() {
+  const selModelo = document.getElementById('pedido-filtro-modelo');
+  const selCor = document.getElementById('pedido-filtro-cor');
+  const prevModelo = selModelo.value;
+  const prevCor = selCor.value;
+
+  const modelos = [...new Set(pedidoCompra.map(i=>i.modelo))].sort();
+  selModelo.innerHTML = '<option value="">Todos os modelos</option>' +
+    modelos.map(m=>`<option value="${esc(m)}"${m===prevModelo?' selected':''}>${esc(m)}</option>`).join('');
+
+  const modeloAtivo = selModelo.value;
+  const cores = [...new Set(pedidoCompra.filter(i=>!modeloAtivo||i.modelo===modeloAtivo).map(i=>i.cor))].sort();
+  selCor.innerHTML = '<option value="">Todas as cores</option>' +
+    cores.map(c=>`<option value="${esc(c)}"${c===prevCor?' selected':''}>${esc(c)}</option>`).join('');
+}
+
 function renderPedidoCompra() {
+  atualizarFiltrosPedido();
   const tb = document.getElementById('tbody-pedido');
+  // total sempre considera o pedido inteiro, o filtro só muda o que é exibido na tabela
+  let total = 0;
+  pedidoCompra.forEach(it => total += (Number(it.qtd)||0) * (Number(it.custo)||0));
+  document.getElementById('pedido-total').textContent = fmt(total);
+
   if (!pedidoCompra.length) {
-    tb.innerHTML = '<tr><td colspan="8" class="empty">Nenhum item no pedido. Clique em "Gerar Sugestão" pra começar.</td></tr>';
-    document.getElementById('pedido-total').textContent = fmt(0);
+    tb.innerHTML = '<tr><td colspan="8" class="empty">Nenhum item no pedido. Clique em "Gerar Sugestão" ou adicione um item manualmente.</td></tr>';
     return;
   }
-  let total = 0;
-  tb.innerHTML = pedidoCompra.map((item, i) => {
+
+  const modeloFiltro = document.getElementById('pedido-filtro-modelo').value;
+  const corFiltro = document.getElementById('pedido-filtro-cor').value;
+  const itens = pedidoCompra
+    .map((item, i) => ({ item, i }))
+    .filter(({item}) => (!modeloFiltro || item.modelo === modeloFiltro) && (!corFiltro || item.cor === corFiltro));
+
+  if (!itens.length) {
+    tb.innerHTML = '<tr><td colspan="8" class="empty">Nenhum item para este filtro.</td></tr>';
+    return;
+  }
+  tb.innerHTML = itens.map(({item, i}) => {
     const subtotal = (Number(item.qtd)||0) * (Number(item.custo)||0);
-    total += subtotal;
     return `<tr>
       <td>${esc(item.modelo)}</td>
       <td>${esc(item.cor)}</td>
@@ -1942,7 +1993,6 @@ function renderPedidoCompra() {
       <td><button class="btn btn-danger btn-sm" onclick="removerItemPedido(${i})">✕</button></td>
     </tr>`;
   }).join('');
-  document.getElementById('pedido-total').textContent = fmt(total);
 }
 
 window.removerItemPedido = function(i) {
@@ -1958,6 +2008,34 @@ function aplicarQtdLote() {
   pedidoCompra.forEach(item => item.qtd = valor);
   salvar();
   renderPedidoCompra();
+}
+
+function atualizarSelectPedidoAdd() {
+  popularSelectProdutos('pedido-add-peca');
+}
+
+// adiciona manualmente qualquer produto ao pedido, inclusive um que já tem estoque —
+// se o mesmo modelo/cor/tamanho já estiver na lista, só soma a quantidade
+function adicionarItemPedidoManual() {
+  const key = document.getElementById('pedido-add-peca').value;
+  const qtd = parseInt(document.getElementById('pedido-add-qtd').value);
+  const custo = parseFloat(document.getElementById('pedido-add-custo').value) || 0;
+  if (!key || !qtd || qtd < 1) { alert('Escolha o produto e uma quantidade válida.'); return; }
+  const [modelo, cor, tamanho] = key.split('||');
+  const est = calcEstoque();
+  const qtdAtual = est[key] || 0;
+  const idxExistente = pedidoCompra.findIndex(i => i.modelo===modelo && i.cor===cor && i.tamanho===tamanho);
+  if (idxExistente !== -1) {
+    pedidoCompra[idxExistente].qtd = (Number(pedidoCompra[idxExistente].qtd)||0) + qtd;
+  } else {
+    pedidoCompra.push({ modelo, cor, tamanho, qtdAtual, qtd, custo });
+  }
+  salvar();
+  renderPedidoCompra();
+  document.getElementById('pedido-add-peca').value = '';
+  document.getElementById('pedido-add-qtd').value = '';
+  document.getElementById('pedido-add-custo').value = '';
+  showToast('✅ Item adicionado ao pedido!');
 }
 
 function gerarPDFPedido() {
@@ -2675,12 +2753,12 @@ function atualizarSelectVendas() {
 
 // ── AJUSTE DE ESTOQUE ─────────────────────────────────────
 // lista todos os produtos já conhecidos (de entradas e vendas), mesmo com estoque zerado ou negativo
-function atualizarSelectAjuste() {
-  // usa getEstoqueAgrupado (não calcEstoque direto) porque ela já preenche com 0 os
-  // tamanhos que outra cor do mesmo modelo já usou — senão um tamanho sem movimento
-  // própria não vira opção e o select fica vazio ao clicar no pill dele
+// usa getEstoqueAgrupado (não calcEstoque direto) porque ela já preenche com 0 os
+// tamanhos que outra cor do mesmo modelo já usou — senão um tamanho sem movimento
+// próprio não vira opção e o select fica vazio ao clicar no pill dele
+function popularSelectProdutos(selectId) {
   const grupos = getEstoqueAgrupado();
-  const sel = document.getElementById('ajuste-peca');
+  const sel = document.getElementById(selectId);
   const prev = sel.value;
   sel.innerHTML = '<option value="">Selecione o produto</option>';
   const opcoes = [];
@@ -2694,6 +2772,9 @@ function atualizarSelectAjuste() {
     const txt = `${o.modelo} · ${o.cor} · ${o.tamanho}  (${o.qtd} em estoque)`;
     sel.innerHTML += `<option value="${esc(o.key)}"${o.key===prev?' selected':''}>${esc(txt)}</option>`;
   });
+}
+function atualizarSelectAjuste() {
+  popularSelectProdutos('ajuste-peca');
 }
 
 function atualizarAjusteAtual() {
@@ -2920,6 +3001,15 @@ document.getElementById('btn-limpar-pedido').addEventListener('click', () => {
   renderPedidoCompra();
 });
 document.getElementById('btn-pdf-pedido').addEventListener('click', gerarPDFPedido);
+document.getElementById('pedido-filtro-modelo').addEventListener('change', renderPedidoCompra);
+document.getElementById('pedido-filtro-cor').addEventListener('change', renderPedidoCompra);
+document.getElementById('btn-add-item-pedido').addEventListener('click', adicionarItemPedidoManual);
+document.getElementById('pedido-add-peca').addEventListener('change', () => {
+  const key = document.getElementById('pedido-add-peca').value;
+  if (!key) return;
+  const [modelo, cor, tamanho] = key.split('||');
+  document.getElementById('pedido-add-custo').value = sugerirCustoPedido(modelo, cor, tamanho) || '';
+});
 document.getElementById('tbody-pedido').addEventListener('input', (e) => {
   const idx = e.target.dataset.idx;
   if (idx === undefined) return;
@@ -3196,6 +3286,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     if(btn.dataset.tab==='saidas') atualizarSelectVendas();
     if(btn.dataset.tab==='calculadora') recalcCalculadora();
     if(btn.dataset.tab==='pedido') {
+      atualizarSelectPedidoAdd();
       if (!pedidoCompra.length) gerarSugestaoPedido();
       else renderPedidoCompra();
     }
@@ -3287,7 +3378,7 @@ function renderAll() {
   renderSummary();
   atualizarSelectVendas();
   if(document.getElementById('tab-relatorio').classList.contains('active')) renderRelatorio();
-  if(document.getElementById('tab-pedido').classList.contains('active')) renderPedidoCompra();
+  if(document.getElementById('tab-pedido').classList.contains('active')) { atualizarSelectPedidoAdd(); renderPedidoCompra(); }
 }
 
 // ── TOAST ─────────────────────────────────────────────────

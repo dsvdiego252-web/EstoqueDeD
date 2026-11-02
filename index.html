@@ -1962,20 +1962,16 @@ function aplicarQtdLote() {
 
 function gerarPDFPedido() {
   if (!pedidoCompra.length) { alert('Adicione itens ao pedido antes de gerar o PDF.'); return; }
+  // o PDF é só pra mandar pro fornecedor: sem os itens zerados (qtd 0) e sem custo/valor
+  const itensPdf = pedidoCompra.filter(item => (Number(item.qtd)||0) > 0);
+  if (!itensPdf.length) { alert('Nenhum item com quantidade maior que 0 pra incluir no PDF.'); return; }
   const dataStr = new Date().toLocaleDateString('pt-BR');
-  let total = 0;
-  const linhas = pedidoCompra.map(item => {
-    const subtotal = (Number(item.qtd)||0) * (Number(item.custo)||0);
-    total += subtotal;
-    return `<tr>
+  const linhas = itensPdf.map(item => `<tr>
       <td>${esc(item.modelo)}</td>
       <td>${esc(item.cor)}</td>
       <td>${esc(item.tamanho)}</td>
       <td style="text-align:center;">${item.qtd}</td>
-      <td style="text-align:right;">${fmt(item.custo)}</td>
-      <td style="text-align:right;">${fmt(subtotal)}</td>
-    </tr>`;
-  }).join('');
+    </tr>`).join('');
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Pedido de Compra - D&D Personalizações</title>
 <style>
@@ -1985,7 +1981,6 @@ function gerarPDFPedido() {
   table { width:100%; border-collapse: collapse; margin-top:10px; }
   th, td { border:1px solid #ccc; padding:8px 10px; font-size:13px; }
   th { background:#f2f2f2; text-align:left; }
-  tfoot td { font-weight:bold; font-size:15px; }
   .btn-imprimir { margin-top:24px; padding:10px 18px; font-size:14px; cursor:pointer; }
   @media print { .btn-imprimir { display:none; } }
 </style>
@@ -1993,9 +1988,8 @@ function gerarPDFPedido() {
   <h1>D&amp;D Personalizações — Pedido de Compra</h1>
   <div class="sub">Data: ${esc(dataStr)}</div>
   <table>
-    <thead><tr><th>Modelo</th><th>Cor</th><th>Tamanho</th><th>Qtd</th><th>Custo Unit.</th><th>Subtotal</th></tr></thead>
+    <thead><tr><th>Modelo</th><th>Cor</th><th>Tamanho</th><th>Qtd</th></tr></thead>
     <tbody>${linhas}</tbody>
-    <tfoot><tr><td colspan="5" style="text-align:right;">Total do Pedido</td><td style="text-align:right;">${fmt(total)}</td></tr></tfoot>
   </table>
   <button class="btn-imprimir" onclick="window.print()">🖨️ Imprimir / Salvar como PDF</button>
   <script>window.onload = () => setTimeout(() => window.print(), 300);<\/script>

@@ -705,6 +705,7 @@
 
 <div class="tabs-bar">
   <button class="tab-btn active" data-tab="estoque">📦 Estoque</button>
+  <button class="tab-btn" data-tab="pedido">🧾 Pedido de Compra</button>
   <button class="tab-btn" data-tab="entradas">⬆️ Entradas</button>
   <button class="tab-btn" data-tab="saidas">⬇️ Vendas</button>
   <button class="tab-btn" data-tab="custos">💰 Custos</button>
@@ -764,6 +765,36 @@
         <tr><td colspan="6" class="empty">Nenhum ajuste registrado.</td></tr>
       </tbody>
     </table>
+    </div>
+  </div>
+
+  <!-- ABA PEDIDO DE COMPRA -->
+  <div class="tab-content" id="tab-pedido">
+    <div class="section-title">Pedido de Compra</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px;">Sugestão automática com tudo que está zerado no estoque. Ajuste as quantidades e os custos antes de gerar o PDF pro fornecedor.</p>
+
+    <div class="estoque-toolbar">
+      <button class="btn btn-primary btn-sm" id="btn-gerar-sugestao-pedido">🔄 Gerar Sugestão (estoque zerado)</button>
+      <input type="number" id="pedido-qtd-lote" class="filtro-control" placeholder="Qtd em lote" min="1" style="max-width:130px;">
+      <button class="btn btn-sm" id="btn-aplicar-lote" style="background:var(--card);color:var(--text);border:1px solid var(--border);">Aplicar a Todos</button>
+      <button class="btn btn-sm" id="btn-limpar-pedido" style="background:var(--card);color:var(--text);border:1px solid var(--border);">🗑️ Limpar</button>
+      <button class="btn btn-sm" id="btn-pdf-pedido" style="background:var(--accent2);color:#1a1200;border:none;font-weight:700;">📄 Gerar PDF</button>
+    </div>
+
+    <div class="table-scroll">
+    <table>
+      <thead><tr>
+        <th>Modelo</th><th>Cor</th><th>Tamanho</th><th>Estoque Atual</th><th>Qtd a Pedir</th><th>Custo Unit. (R$)</th><th>Subtotal</th><th></th>
+      </tr></thead>
+      <tbody id="tbody-pedido">
+        <tr><td colspan="8" class="empty">Nenhum item no pedido. Clique em "Gerar Sugestão" pra começar.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <div style="max-width:320px;background:var(--card);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:8px;padding:16px 20px;margin-top:16px;">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);margin-bottom:6px;">Total do Pedido</div>
+      <div style="font-family:var(--font-display);font-size:36px;color:var(--accent);" id="pedido-total">R$ 0,00</div>
     </div>
   </div>
 
@@ -1579,6 +1610,7 @@ let investimentos = [];
 let ajustes = [];
 let aportesCarteira = []; // depósitos na carteira: {valor, data, obs} — entradas marcadas "Pago da Carteira" descontam daqui
 let despesasCarteira = []; // saídas da carteira que não são entrada de camisas: {categoria, descricao, valor, data, obs}
+let pedidoCompra = []; // itens do Pedido de Compra: {modelo, cor, tamanho, qtdAtual, qtd, custo}
 let _carregado = false;
 let rankFiltro = null; // { campo: 'modelo'|'estampa'|'cor'|'tamanho', valor: string } — filtro ativo ao clicar num ranking TOP
 let tipoFiltro = null; // 'Entrada' | 'Venda' — filtro ativo ao clicar nos cards Total Comprado/Total Vendido
@@ -1589,7 +1621,7 @@ let simulacaoCompra = []; // {modelo,cor,tamanho,qtd,custo} — simulação de c
 // ── SALVAR NA NUVEM ───────────────────────────────────────
 async function salvar() {
   try {
-    await setDoc(DOC_REF, { entradas, saidas, custos, investimentos, ajustes, aportesCarteira, despesasCarteira, atualizado: new Date().toISOString() });
+    await setDoc(DOC_REF, { entradas, saidas, custos, investimentos, ajustes, aportesCarteira, despesasCarteira, pedidoCompra, atualizado: new Date().toISOString() });
   } catch(e) {
     console.error("Erro ao salvar:", e);
     showToast("⚠️ Erro ao salvar na nuvem.", true);
@@ -1609,6 +1641,7 @@ function iniciarSync() {
       ajustes  = d.ajustes  || [];
       aportesCarteira = d.aportesCarteira || [];
       despesasCarteira = d.despesasCarteira || [];
+      pedidoCompra = d.pedidoCompra || [];
     }
     if (!_carregado) {
       _carregado = true;
@@ -1630,6 +1663,7 @@ function iniciarSync() {
     ajustes  = JSON.parse(localStorage.getItem('est_ajustes')  || '[]');
     aportesCarteira = JSON.parse(localStorage.getItem('est_aportes') || '[]');
     despesasCarteira = JSON.parse(localStorage.getItem('est_despesas') || '[]');
+    pedidoCompra = JSON.parse(localStorage.getItem('est_pedido') || '[]');
     renderAll();
     renderCustos();
   });
@@ -1851,6 +1885,127 @@ window.removerSimulacaoItem = function(i) {
     if (chk) chk.checked = false;
   }
 };
+
+// ── PEDIDO DE COMPRA ──────────────────────────────────────
+// sugere o valor padrão pros modelos Básica 100% Algodão / Oversized; pra qualquer outro
+// modelo, usa o último custo pago (se já teve entrada alguma vez) ou deixa 0
+function sugerirCustoPedido(modelo, cor, tamanho) {
+  const nome = (modelo || '').toLowerCase();
+  if (nome.includes('oversized')) return 22.90;
+  if (nome.includes('básica') || nome.includes('basica')) return 18.90;
+  return custoMedioPonderado(modelo, cor, tamanho) || 0;
+}
+
+function gerarSugestaoPedido() {
+  if (pedidoCompra.length && !confirm('Isso substitui os itens atuais do pedido pela sugestão automática (tudo que está zerado). Continuar?')) return;
+  const grupos = getEstoqueAgrupado();
+  const itens = [];
+  Object.values(grupos).forEach(g => {
+    Object.entries(g.tamanhos).forEach(([tamanho, q]) => {
+      if (q > 0) return;
+      itens.push({
+        modelo: g.modelo,
+        cor: g.cor,
+        tamanho,
+        qtdAtual: q,
+        qtd: Math.max(1, -q),
+        custo: sugerirCustoPedido(g.modelo, g.cor, tamanho),
+      });
+    });
+  });
+  itens.sort((a,b)=>`${a.modelo}||${a.cor}||${a.tamanho}`.localeCompare(`${b.modelo}||${b.cor}||${b.tamanho}`));
+  pedidoCompra = itens;
+  salvar();
+  renderPedidoCompra();
+  showToast('✅ Sugestão gerada!');
+}
+
+function renderPedidoCompra() {
+  const tb = document.getElementById('tbody-pedido');
+  if (!pedidoCompra.length) {
+    tb.innerHTML = '<tr><td colspan="8" class="empty">Nenhum item no pedido. Clique em "Gerar Sugestão" pra começar.</td></tr>';
+    document.getElementById('pedido-total').textContent = fmt(0);
+    return;
+  }
+  let total = 0;
+  tb.innerHTML = pedidoCompra.map((item, i) => {
+    const subtotal = (Number(item.qtd)||0) * (Number(item.custo)||0);
+    total += subtotal;
+    return `<tr>
+      <td>${esc(item.modelo)}</td>
+      <td>${esc(item.cor)}</td>
+      <td>${esc(item.tamanho)}</td>
+      <td style="color:var(--muted);">${Math.max(0, item.qtdAtual)}</td>
+      <td><input type="number" min="1" step="1" value="${item.qtd}" class="pedido-qtd" data-idx="${i}" style="width:70px;"></td>
+      <td><input type="number" min="0" step="0.01" value="${item.custo}" class="pedido-custo" data-idx="${i}" style="width:90px;"></td>
+      <td class="pedido-subtotal">${fmt(subtotal)}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="removerItemPedido(${i})">✕</button></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('pedido-total').textContent = fmt(total);
+}
+
+window.removerItemPedido = function(i) {
+  pedidoCompra.splice(i, 1);
+  salvar();
+  renderPedidoCompra();
+};
+
+function aplicarQtdLote() {
+  const valor = parseInt(document.getElementById('pedido-qtd-lote').value);
+  if (!valor || valor < 1) { alert('Digite uma quantidade válida em lote.'); return; }
+  if (!pedidoCompra.length) { alert('Não há itens no pedido.'); return; }
+  pedidoCompra.forEach(item => item.qtd = valor);
+  salvar();
+  renderPedidoCompra();
+}
+
+function gerarPDFPedido() {
+  if (!pedidoCompra.length) { alert('Adicione itens ao pedido antes de gerar o PDF.'); return; }
+  const dataStr = new Date().toLocaleDateString('pt-BR');
+  let total = 0;
+  const linhas = pedidoCompra.map(item => {
+    const subtotal = (Number(item.qtd)||0) * (Number(item.custo)||0);
+    total += subtotal;
+    return `<tr>
+      <td>${esc(item.modelo)}</td>
+      <td>${esc(item.cor)}</td>
+      <td>${esc(item.tamanho)}</td>
+      <td style="text-align:center;">${item.qtd}</td>
+      <td style="text-align:right;">${fmt(item.custo)}</td>
+      <td style="text-align:right;">${fmt(subtotal)}</td>
+    </tr>`;
+  }).join('');
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Pedido de Compra - D&D Personalizações</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; color:#111; padding:24px; }
+  h1 { font-size:20px; margin-bottom:2px; }
+  .sub { color:#555; font-size:13px; margin-bottom:20px; }
+  table { width:100%; border-collapse: collapse; margin-top:10px; }
+  th, td { border:1px solid #ccc; padding:8px 10px; font-size:13px; }
+  th { background:#f2f2f2; text-align:left; }
+  tfoot td { font-weight:bold; font-size:15px; }
+  .btn-imprimir { margin-top:24px; padding:10px 18px; font-size:14px; cursor:pointer; }
+  @media print { .btn-imprimir { display:none; } }
+</style>
+</head><body>
+  <h1>D&amp;D Personalizações — Pedido de Compra</h1>
+  <div class="sub">Data: ${esc(dataStr)}</div>
+  <table>
+    <thead><tr><th>Modelo</th><th>Cor</th><th>Tamanho</th><th>Qtd</th><th>Custo Unit.</th><th>Subtotal</th></tr></thead>
+    <tbody>${linhas}</tbody>
+    <tfoot><tr><td colspan="5" style="text-align:right;">Total do Pedido</td><td style="text-align:right;">${fmt(total)}</td></tr></tfoot>
+  </table>
+  <button class="btn-imprimir" onclick="window.print()">🖨️ Imprimir / Salvar como PDF</button>
+  <script>window.onload = () => setTimeout(() => window.print(), 300);<\/script>
+</body></html>`;
+  const win = window.open('', '_blank');
+  if (!win) { alert('Não foi possível abrir a janela de impressão. Verifique o bloqueador de pop-ups do navegador.'); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
 
 // ── RENDER TABELA ENTRADAS ───────────────────────────────
 function renderEntradas() {
@@ -2759,6 +2914,36 @@ document.getElementById('tbody-simulacao-compra').addEventListener('input', (e) 
   simulacaoCompra.forEach(it => total += (Number(it.qtd)||0) * (Number(it.custo)||0));
   document.getElementById('sim-total').textContent = fmt(total);
 });
+
+// ── PEDIDO DE COMPRA ──────────────────────────────────────
+document.getElementById('btn-gerar-sugestao-pedido').addEventListener('click', gerarSugestaoPedido);
+document.getElementById('btn-aplicar-lote').addEventListener('click', aplicarQtdLote);
+document.getElementById('btn-limpar-pedido').addEventListener('click', () => {
+  if (!pedidoCompra.length) return;
+  if (!confirm('Remover todos os itens do pedido?')) return;
+  pedidoCompra = [];
+  salvar();
+  renderPedidoCompra();
+});
+document.getElementById('btn-pdf-pedido').addEventListener('click', gerarPDFPedido);
+document.getElementById('tbody-pedido').addEventListener('input', (e) => {
+  const idx = e.target.dataset.idx;
+  if (idx === undefined) return;
+  const item = pedidoCompra[idx];
+  if (!item) return;
+  if (e.target.classList.contains('pedido-qtd'))   item.qtd   = parseFloat(e.target.value) || 0;
+  if (e.target.classList.contains('pedido-custo')) item.custo = parseFloat(e.target.value) || 0;
+  const subtotal = (Number(item.qtd)||0) * (Number(item.custo)||0);
+  e.target.closest('tr').querySelector('.pedido-subtotal').textContent = fmt(subtotal);
+  let total = 0;
+  pedidoCompra.forEach(it => total += (Number(it.qtd)||0) * (Number(it.custo)||0));
+  document.getElementById('pedido-total').textContent = fmt(total);
+});
+document.getElementById('tbody-pedido').addEventListener('change', (e) => {
+  if (e.target.dataset.idx === undefined) return;
+  salvar();
+});
+
 document.getElementById('btn-salvar-ajuste').addEventListener('click', () => {
   const key = document.getElementById('ajuste-peca').value;
   const qtdReal = parseInt(document.getElementById('ajuste-qtd-real').value);
@@ -3016,6 +3201,10 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     if(btn.dataset.tab==='relatorio') renderRelatorio();
     if(btn.dataset.tab==='saidas') atualizarSelectVendas();
     if(btn.dataset.tab==='calculadora') recalcCalculadora();
+    if(btn.dataset.tab==='pedido') {
+      if (!pedidoCompra.length) gerarSugestaoPedido();
+      else renderPedidoCompra();
+    }
   });
 });
 
@@ -3104,6 +3293,7 @@ function renderAll() {
   renderSummary();
   atualizarSelectVendas();
   if(document.getElementById('tab-relatorio').classList.contains('active')) renderRelatorio();
+  if(document.getElementById('tab-pedido').classList.contains('active')) renderPedidoCompra();
 }
 
 // ── TOAST ─────────────────────────────────────────────────
@@ -3244,7 +3434,7 @@ document.getElementById('btn-limpar-calculadora').addEventListener('click', () =
 
 // ── HELPERS MODAL BACKUP ─────────────────────────────────
 function abrirModalSalvar() {
-  const dados = { entradas, saidas, custos, investimentos, ajustes, aportesCarteira, despesasCarteira, salvo_em: new Date().toISOString() };
+  const dados = { entradas, saidas, custos, investimentos, ajustes, aportesCarteira, despesasCarteira, pedidoCompra, salvo_em: new Date().toISOString() };
   document.getElementById('backup-textarea').value = JSON.stringify(dados, null, 2);
   document.getElementById('modo-salvar').style.display    = 'block';
   document.getElementById('modo-restaurar').style.display = 'none';
@@ -3268,7 +3458,7 @@ function fecharModalBackup() {
 
 // ── SALVAR BACKUP ─────────────────────────────────────────
 document.getElementById('btn-salvar-backup').addEventListener('click', () => {
-  const dados = { entradas, saidas, custos, investimentos, ajustes, aportesCarteira, despesasCarteira, salvo_em: new Date().toISOString() };
+  const dados = { entradas, saidas, custos, investimentos, ajustes, aportesCarteira, despesasCarteira, pedidoCompra, salvo_em: new Date().toISOString() };
   const json  = JSON.stringify(dados, null, 2);
   const nome  = `backup_estoque_${hoje()}.json`;
 
@@ -3333,6 +3523,7 @@ document.getElementById('btn-confirmar-restaurar').addEventListener('click', () 
     ajustes       = Array.isArray(dados.ajustes) ? dados.ajustes : [];
     aportesCarteira = Array.isArray(dados.aportesCarteira) ? dados.aportesCarteira : [];
     despesasCarteira = Array.isArray(dados.despesasCarteira) ? dados.despesasCarteira : [];
+    pedidoCompra = Array.isArray(dados.pedidoCompra) ? dados.pedidoCompra : [];
     salvar();
     renderAll();
     renderCustos();
@@ -3360,6 +3551,7 @@ document.getElementById('input-importar').addEventListener('change', function() 
       ajustes       = Array.isArray(dados.ajustes) ? dados.ajustes : [];
       aportesCarteira = Array.isArray(dados.aportesCarteira) ? dados.aportesCarteira : [];
       despesasCarteira = Array.isArray(dados.despesasCarteira) ? dados.despesasCarteira : [];
+      pedidoCompra = Array.isArray(dados.pedidoCompra) ? dados.pedidoCompra : [];
       salvar(); renderAll(); renderCustos();
       fecharModalBackup();
       showToast('✅ Backup carregado com sucesso!');

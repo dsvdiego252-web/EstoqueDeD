@@ -1284,6 +1284,10 @@
         <label>Observação</label>
         <input type="text" id="inv-obs" placeholder="Opcional">
       </div>
+      <div class="form-group" style="display:flex;align-items:center;flex-direction:row;gap:8px;">
+        <input type="checkbox" id="inv-carteira" style="width:18px;height:18px;accent-color:var(--accent);">
+        <label for="inv-carteira" style="margin:0;cursor:pointer;">Pago da Carteira</label>
+      </div>
     </div>
     <button class="btn btn-primary" id="btn-add-investimento">+ Registrar Investimento</button>
 
@@ -2107,7 +2111,7 @@ function renderInvestimentos() {
   tb.innerHTML = [...investimentos].reverse().map((inv,i)=>{
     const idx = investimentos.length-1-i;
     return `<tr>
-      <td>${fmtData(inv.data)}</td>
+      <td>${fmtData(inv.data)}${inv.carteira?' <span title="Pago da Carteira">💰</span>':''}</td>
       <td>${esc(inv.canal)||'—'}</td>
       <td>${esc(inv.descricao)||'—'}</td>
       <td>${fmt(inv.valor)}</td>
@@ -2118,19 +2122,21 @@ function renderInvestimentos() {
 }
 
 // ── CARTEIRA ───────────────────────────────────────────────
-// saldo = aportes + dinheiro recebido nas vendas - entradas marcadas "Pago da Carteira" - saídas (despesas)
+// saldo = aportes + dinheiro recebido nas vendas - entradas marcadas "Pago da Carteira"
+// - investimentos marcados "Pago da Carteira" - saídas (despesas)
 // o valor recebido por venda é: custo da camisa + lucro líquido + DTF + embalagem (rateada) + outros custos
 // (não entra Outros Custos 2 nem a taxa do canal, que já fica descontada dentro do lucro líquido)
 function calcCarteiraSaldo() {
   const totalAportes = aportesCarteira.reduce((a,p)=>a+Number(p.valor||0),0);
   const totalGasto = entradas.filter(e=>e.carteira).reduce((a,e)=>a+Number(e.custo)*Number(e.qtd)+Number(e.frete||0),0);
+  const totalInvestCarteira = investimentos.filter(i=>i.carteira).reduce((a,i)=>a+Number(i.valor||0),0);
   const totalDespesas = despesasCarteira.reduce((a,d)=>a+Number(d.valor||0),0);
   const totalRecebidoVendas = saidas.reduce((a,s) => {
     const custoCamisa = custoMedioPonderado(s.modelo, s.cor, s.tamanho);
     const custosExtras = (custos.dtf||0) + (custos.outros||0) + (custos.embalagem||0)/s.qtd;
     return a + (custoCamisa + (s.lucroLiq||0) + custosExtras) * s.qtd;
   }, 0);
-  return totalAportes + totalRecebidoVendas - totalGasto - totalDespesas;
+  return totalAportes + totalRecebidoVendas - totalGasto - totalInvestCarteira - totalDespesas;
 }
 function renderCarteira() {
   const saldo = calcCarteiraSaldo();
@@ -2168,7 +2174,14 @@ function renderCarteira() {
       valor: Number(e.custo)*Number(e.qtd) + Number(e.frete||0), obs: e.obs,
       acao: '<span style="color:var(--muted)">—</span>',
     }));
-  const todasSaidas = [...linhasDespesas, ...linhasEntradasCarteira].sort((a,b)=>b.data.localeCompare(a.data));
+  const linhasInvestCarteira = investimentos
+    .filter(i => i.carteira)
+    .map(i => ({
+      data: i.data, categoria: '💰 Investimento', descricao: `${i.canal}${i.descricao ? ' · '+i.descricao : ''}`,
+      valor: Number(i.valor)||0, obs: i.obs,
+      acao: '<span style="color:var(--muted)">—</span>',
+    }));
+  const todasSaidas = [...linhasDespesas, ...linhasEntradasCarteira, ...linhasInvestCarteira].sort((a,b)=>b.data.localeCompare(a.data));
 
   if(!todasSaidas.length){
     tbD.innerHTML='<tr><td colspan="6" class="empty">Nenhuma saída registrada.</td></tr>';
@@ -2962,11 +2975,12 @@ document.getElementById('btn-add-investimento').addEventListener('click',()=>{
   const valor      = parseFloat(document.getElementById('inv-valor').value)||0;
   const data       = document.getElementById('inv-data').value;
   const obs        = document.getElementById('inv-obs').value.trim();
+  const carteira   = document.getElementById('inv-carteira').checked;
   if(!canal||!valor||valor<=0||!data){
     alert('Preencha: Canal, Valor Investido e Data.');
     return;
   }
-  investimentos.push({canal,descricao,valor,data,obs});
+  investimentos.push({canal,descricao,valor,data,obs,carteira});
   salvar();
   renderAll();
   document.getElementById('inv-canal').value='';
@@ -2974,6 +2988,7 @@ document.getElementById('btn-add-investimento').addEventListener('click',()=>{
   document.getElementById('inv-valor').value='';
   document.getElementById('inv-obs').value='';
   document.getElementById('inv-data').value=hoje();
+  document.getElementById('inv-carteira').checked=false;
 });
 
 // ── AJUSTAR ESTOQUE ───────────────────────────────────────

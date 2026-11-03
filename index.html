@@ -2153,20 +2153,33 @@ function renderCarteira() {
   }
 
   const tbD = document.getElementById('tbody-despesas');
-  if(!despesasCarteira.length){
+  // junta as despesas manuais com as entradas marcadas "Pago da Carteira", pra ver tudo
+  // que saiu da carteira num lugar só (a entrada só pode ser excluída na aba Entradas)
+  const linhasDespesas = despesasCarteira.map((d,i) => ({
+    data: d.data, categoria: d.categoria, descricao: d.descricao, valor: Number(d.valor)||0,
+    obs: d.obs, acao: `<button class="btn btn-danger btn-sm" onclick="delDespesa(${i})">✕</button>`,
+  }));
+  const linhasEntradasCarteira = entradas
+    .map((e,i) => ({e,i}))
+    .filter(({e}) => e.carteira)
+    .map(({e}) => ({
+      data: e.data, categoria: '💰 Entrada', descricao: `${e.modelo} · ${e.cor} · ${e.tamanho}`,
+      valor: Number(e.custo)*Number(e.qtd) + Number(e.frete||0), obs: e.obs,
+      acao: '<span style="color:var(--muted)">—</span>',
+    }));
+  const todasSaidas = [...linhasDespesas, ...linhasEntradasCarteira].sort((a,b)=>b.data.localeCompare(a.data));
+
+  if(!todasSaidas.length){
     tbD.innerHTML='<tr><td colspan="6" class="empty">Nenhuma saída registrada.</td></tr>';
   } else {
-    tbD.innerHTML = [...despesasCarteira].reverse().map((d,i)=>{
-      const idx = despesasCarteira.length-1-i;
-      return `<tr>
-        <td>${fmtData(d.data)}</td>
-        <td>${esc(d.categoria)||'—'}</td>
-        <td>${esc(d.descricao)||'—'}</td>
-        <td style="color:var(--danger);font-weight:600">${fmt(d.valor)}</td>
-        <td style="color:var(--muted);font-size:12px">${esc(d.obs)||'—'}</td>
-        <td><button class="btn btn-danger btn-sm" onclick="delDespesa(${idx})">✕</button></td>
-      </tr>`;
-    }).join('');
+    tbD.innerHTML = todasSaidas.map(row => `<tr>
+        <td>${fmtData(row.data)}</td>
+        <td>${esc(row.categoria)||'—'}</td>
+        <td>${esc(row.descricao)||'—'}</td>
+        <td style="color:var(--danger);font-weight:600">${fmt(row.valor)}</td>
+        <td style="color:var(--muted);font-size:12px">${esc(row.obs)||'—'}</td>
+        <td>${row.acao}</td>
+      </tr>`).join('');
   }
 }
 

@@ -1723,20 +1723,29 @@ document.getElementById('inv-data').value = hoje();
 document.getElementById('desp-data').value = hoje();
 
 // ── ESTOQUE CALC ─────────────────────────────────────────
+// o ajuste de estoque é uma contagem real: a partir dele o estoque daquela peça passa a ser
+// exatamente qtdDepois, e tudo que foi lançado antes (entradas, vendas, ajustes antigos) é
+// esquecido. Só contam as entradas/vendas lançadas depois do último ajuste (pelo criadoEm).
+// Ajustes antigos (sem criadoEm, de antes dessa regra) continuam somando a diferença (delta),
+// porque nos registros antigos não dá pra saber a ordem em que as coisas foram lançadas.
 function calcEstoque() {
+  const chave = x => `${x.modelo}||${x.cor}||${x.tamanho}`;
+  // ajustes são sempre adicionados no fim da lista, então o último da peça é o mais recente
+  const ultimoAjuste = {};
+  ajustes.forEach(a => { if (a.criadoEm) ultimoAjuste[chave(a)] = a; });
+
   const est = {};
-  entradas.forEach(e => {
-    const k = `${e.modelo}||${e.cor}||${e.tamanho}`;
-    est[k] = (est[k]||0) + Number(e.qtd);
-  });
-  saidas.forEach(s => {
-    const k = `${s.modelo}||${s.cor}||${s.tamanho}`;
-    est[k] = (est[k]||0) - Number(s.qtd);
-  });
-  ajustes.forEach(a => {
-    const k = `${a.modelo}||${a.cor}||${a.tamanho}`;
-    est[k] = (est[k]||0) + Number(a.delta);
-  });
+  Object.entries(ultimoAjuste).forEach(([k, a]) => { est[k] = Number(a.qtdDepois) || 0; });
+  const soma = (x, valor) => {
+    const k = chave(x);
+    const a = ultimoAjuste[k];
+    // registro sem criadoEm é antigo, então sempre é anterior a um ajuste novo
+    if (a && !(x.criadoEm && x.criadoEm > a.criadoEm)) return;
+    est[k] = (est[k]||0) + valor;
+  };
+  entradas.forEach(e => soma(e, Number(e.qtd)));
+  saidas.forEach(s => soma(s, -Number(s.qtd)));
+  ajustes.forEach(a => { if (!a.criadoEm) soma(a, Number(a.delta)); });
   return est;
 }
 
@@ -2956,7 +2965,7 @@ document.getElementById('btn-add-entrada').addEventListener('click',()=>{
     alert('Preencha todos os campos obrigatórios (Modelo, Cor, Tamanho, Quantidade e Data).');
     return;
   }
-  entradas.push({modelo,cor,tamanho,fornecedor,qtd,custo,frete,carteira,data,obs});
+  entradas.push({modelo,cor,tamanho,fornecedor,qtd,custo,frete,carteira,data,obs,criadoEm:new Date().toISOString()});
   salvar();
   renderAll();
   document.getElementById('ent-modelo').value='';
@@ -3072,8 +3081,8 @@ document.getElementById('btn-salvar-ajuste').addEventListener('click', () => {
   const [modelo, cor, tamanho] = key.split('||');
   const qtdAntes = calcEstoque()[key] || 0;
   const delta = qtdReal - qtdAntes;
-  if (delta === 0) { fecharModalAjuste(); return; }
-  ajustes.push({modelo, cor, tamanho, qtdAntes, qtdDepois: qtdReal, delta, data, obs});
+  // salva mesmo com delta 0: o ajuste marca a contagem real e "zera" o histórico anterior da peça
+  ajustes.push({modelo, cor, tamanho, qtdAntes, qtdDepois: qtdReal, delta, data, obs, criadoEm: new Date().toISOString()});
   salvar();
   renderAll();
   fecharModalAjuste();
@@ -3173,7 +3182,7 @@ document.getElementById('btn-add-saida').addEventListener('click',()=>{
   const calc = calcularLucroLiq();
   const lucroLiq = calc ? calc.lucro : 0;
 
-  saidas.push({modelo,cor,tamanho,estampa,canal,qtd,preco,desconto,cliente,estado,lucroLiq,data,obs});
+  saidas.push({modelo,cor,tamanho,estampa,canal,qtd,preco,desconto,cliente,estado,lucroLiq,data,obs,criadoEm:new Date().toISOString()});
   salvar();
   renderAll();
 
@@ -3205,7 +3214,7 @@ window.delSaida = function(i) {
   saidas.splice(i,1); salvar(); renderAll();
 };
 window.delAjuste = function(i) {
-  if(!confirm('Remover este ajuste? O estoque volta a considerar o valor calculado anteriormente.')) return;
+  if(!confirm('Remover este ajuste? O estoque volta a considerar o ajuste anterior (ou todas as entradas e vendas, se não houver outro).')) return;
   ajustes.splice(i,1); salvar(); renderAll();
 };
 

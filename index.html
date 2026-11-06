@@ -1847,7 +1847,10 @@ function renderEstoque(filtro='') {
         const cls = q<=0?'zero':q<=3?'low':'ok';
         const marcado = simulacaoCompra.some(i=>i.modelo===g.modelo&&i.cor===g.cor&&i.tamanho===sz);
         const checkbox = q<=0 ? `<input type="checkbox" class="pill-check" title="Marcar para simular compra" data-modelo="${esc(g.modelo)}" data-cor="${esc(g.cor)}" data-tamanho="${esc(sz)}" data-qtd="${q}"${marcado?' checked':''}>` : '';
-        return `<div class="size-pill ${cls}" tabindex="0" title="Toque para ajustar o estoque" data-modelo="${esc(g.modelo)}" data-cor="${esc(g.cor)}" data-tamanho="${esc(sz)}">${checkbox}<span class="sz">${sz}</span><span class="qty">${Math.max(0,q)}</span></div>`;
+        // saldo negativo aparece como está (não vira 0) — senão uma entrada que só "paga" um saldo
+        // negativo antigo parece não ter entrado no estoque
+        const titulo = q<0 ? `Saldo negativo (${q}): saíram/foram ajustadas mais peças do que entraram. Toque para ajustar o estoque` : 'Toque para ajustar o estoque';
+        return `<div class="size-pill ${cls}" tabindex="0" title="${titulo}" data-modelo="${esc(g.modelo)}" data-cor="${esc(g.cor)}" data-tamanho="${esc(sz)}">${checkbox}<span class="sz">${sz}</span><span class="qty">${q}</span></div>`;
       }).join('');
 
     html += `<div class="ecard">

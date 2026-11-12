@@ -2458,7 +2458,8 @@ function renderRelatorio() {
     return true;
   }
   const ents = entradas.filter(e=>pass(e.data));
-  const sais = saidas.filter(s=>pass(s.data));
+  // venda devolvida não conta como vendida (totais, lucro, rankings, gráficos e movimentações)
+  const sais = saidas.filter(s=>!s.devolucao && pass(s.data));
   const totalComprado  = ents.reduce((a,b)=>a+b.custo*b.qtd,0);
   const totalVendido   = sais.reduce((a,b)=>a+(b.preco-(b.desconto||0))*b.qtd,0);
   const totalLucroLiq  = sais.reduce((a,b)=>a+(b.lucroLiq||0)*b.qtd,0);
@@ -2896,7 +2897,7 @@ function renderRankingChart(containerId, sais, campo, opts) {
 function renderSummary() {
   document.getElementById('sc-total').textContent   = totalEstoque();
   document.getElementById('sc-entrada').textContent = movMes(entradas);
-  document.getElementById('sc-saida').textContent   = movMes(saidas);
+  document.getElementById('sc-saida').textContent   = movMes(saidas.filter(s=>!s.devolucao));
   document.getElementById('sc-modelos').textContent = modelosAtivos();
 
   // valor total em estoque (custo médio × qtd disponível)

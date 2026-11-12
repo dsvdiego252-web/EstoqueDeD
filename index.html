@@ -708,6 +708,7 @@
   <button class="tab-btn" data-tab="pedido">🧾 Pedido de Compra</button>
   <button class="tab-btn" data-tab="entradas">⬆️ Entradas</button>
   <button class="tab-btn" data-tab="saidas">⬇️ Vendas</button>
+  <button class="tab-btn" data-tab="devolucoes">↩️ Devoluções</button>
   <button class="tab-btn" data-tab="custos">💰 Custos</button>
   <button class="tab-btn" data-tab="calculadora">🧮 Calculadora de Custos</button>
   <button class="tab-btn" data-tab="financeiro">💳 Financeiro</button>
@@ -1049,6 +1050,64 @@
   </div>
 
   <!-- ABA CUSTOS -->
+  <!-- ABA DEVOLUÇÕES -->
+  <div class="tab-content" id="tab-devolucoes">
+    <div class="section-title">Incluir Devolução</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Cliente</label>
+        <select id="dev-cliente">
+          <option value="">Selecione o cliente</option>
+        </select>
+      </div>
+      <div class="form-group" style="grid-column: span 2;">
+        <label>Venda</label>
+        <select id="dev-venda" disabled>
+          <option value="">Selecione o cliente primeiro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Canal da Venda</label>
+        <select id="dev-canal">
+          <option value="">Selecione</option>
+          <option>Shopee</option>
+          <option>Loja Física</option>
+          <option>WhatsApp</option>
+          <option>Instagram</option>
+          <option>Mercado Livre</option>
+          <option>Outro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Data da Devolução</label>
+        <input type="date" id="dev-data">
+      </div>
+      <div class="form-group" style="grid-column: span 2;">
+        <label>Motivo da Devolução</label>
+        <input type="text" id="dev-motivo" placeholder="Ex: Tamanho errado, defeito, desistência...">
+      </div>
+      <div class="form-group" style="display:flex;align-items:center;flex-direction:row;gap:8px;">
+        <input type="checkbox" id="dev-volta-estoque" checked style="width:18px;height:18px;accent-color:var(--accent);">
+        <label for="dev-volta-estoque" style="margin:0;cursor:pointer;">Peça volta para o estoque</label>
+      </div>
+    </div>
+    <div id="dev-resumo" style="display:none;font-size:13px;color:var(--muted);margin-bottom:16px;"></div>
+    <button class="btn btn-primary" id="btn-add-devolucao">↩️ Concluir Devolução</button>
+
+    <hr class="divider">
+    <div class="section-title">Histórico de Devoluções</div>
+    <div class="table-scroll">
+    <table>
+      <thead><tr>
+        <th>Data Devolução</th><th>Cliente</th><th>Data Venda</th><th>Peça</th><th>Canal</th><th>Qtd</th><th>Valor da Venda</th><th>Motivo</th><th>Estoque</th><th></th>
+      </tr></thead>
+      <tbody id="tbody-devolucoes">
+        <tr><td colspan="10" class="empty">Nenhuma devolução registrada.</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
   <div class="tab-content" id="tab-custos">
     <div class="section-title">Configurar Custos Operacionais</div>
     <p style="font-size:13px;color:var(--muted);margin-bottom:20px;">Esses valores são usados para calcular o custo real por peça nos relatórios.</p>
@@ -1719,6 +1778,7 @@ function custoMedioPonderado(modelo, cor, tamanho) {
 document.getElementById('hDate').textContent = new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 document.getElementById('ent-data').value = hoje();
 document.getElementById('sai-data').value = hoje();
+document.getElementById('dev-data').value = hoje();
 document.getElementById('inv-data').value = hoje();
 document.getElementById('desp-data').value = hoje();
 
@@ -1745,6 +1805,11 @@ function calcEstoque() {
   };
   entradas.forEach(e => soma(e, Number(e.qtd)));
   saidas.forEach(s => soma(s, -Number(s.qtd)));
+  // devolução com "peça volta para o estoque": devolve a peça, contando a partir do momento da devolução
+  saidas.forEach(s => {
+    const d = s.devolucao;
+    if (d && d.voltaEstoque) soma({modelo:s.modelo, cor:s.cor, tamanho:s.tamanho, criadoEm:d.criadoEm}, Number(s.qtd));
+  });
   ajustes.forEach(a => { if (!a.criadoEm) soma(a, Number(a.delta)); });
   return est;
 }
@@ -2143,7 +2208,8 @@ function calcCarteiraSaldo() {
   const totalGasto = entradas.filter(e=>e.carteira).reduce((a,e)=>a+Number(e.custo)*Number(e.qtd)+Number(e.frete||0),0);
   const totalInvestCarteira = investimentos.filter(i=>i.carteira).reduce((a,i)=>a+Number(i.valor||0),0);
   const totalDespesas = despesasCarteira.reduce((a,d)=>a+Number(d.valor||0),0);
-  const totalRecebidoVendas = saidas.reduce((a,s) => {
+  // venda devolvida não conta: o dinheiro voltou pro cliente
+  const totalRecebidoVendas = saidas.filter(s => !s.devolucao).reduce((a,s) => {
     const custoCamisa = custoMedioPonderado(s.modelo, s.cor, s.tamanho);
     const custosExtras = (custos.dtf||0) + (custos.outros||0) + (custos.embalagem||0)/s.qtd;
     return a + (custoCamisa + (s.lucroLiq||0) + custosExtras) * s.qtd;
@@ -2254,7 +2320,7 @@ function renderSaidas() {
       <td>${fmt(total)}</td>
       <td style="color:${llCor};font-weight:600">${fmt(lucroTotal)}</td>
       <td style="color:${pctCor};font-weight:600">${pct.toFixed(1)}%</td>
-      <td style="color:var(--muted);font-size:12px">${esc(s.obs)||'—'}</td>
+      <td style="color:var(--muted);font-size:12px">${s.devolucao?'<span class="badge badge-saida" title="'+esc(s.devolucao.motivo||'')+'">↩️ Devolvida</span> ':''}${esc(s.obs)||(s.devolucao?'':'—')}</td>
       <td style="display:flex;gap:6px;">
         <button class="btn btn-sm" style="background:var(--card);border:1px solid var(--border);color:var(--text);" onclick="abrirModal(${idx})">✏️</button>
         <button class="btn btn-danger btn-sm" onclick="delSaida(${idx})">✕</button>
@@ -2262,6 +2328,116 @@ function renderSaidas() {
     </tr>`;
   }).join('');
 }
+
+// ── DEVOLUÇÕES ───────────────────────────────────────────
+// a devolução fica guardada na própria venda (s.devolucao = {data, motivo, canal, voltaEstoque, criadoEm}).
+// Venda devolvida deixa de somar na Carteira / Saldo em Caixa; se a peça voltou, volta pro estoque.
+const SEM_CLIENTE = '__sem_cliente__';
+function clienteDaVenda(s) { return (s.cliente||'').trim() || SEM_CLIENTE; }
+function valorVenda(s) { return (Number(s.preco) - Number(s.desconto||0)) * Number(s.qtd); }
+
+function atualizarSelectDevolucao() {
+  const selCli = document.getElementById('dev-cliente');
+  const prev = selCli.value;
+  const clientes = [...new Set(saidas.filter(s=>!s.devolucao).map(clienteDaVenda))]
+    .sort((a,b)=> a===SEM_CLIENTE ? 1 : b===SEM_CLIENTE ? -1 : a.localeCompare(b,'pt-BR'));
+  selCli.innerHTML = '<option value="">Selecione o cliente</option>' + clientes.map(c =>
+    `<option value="${esc(c)}"${c===prev?' selected':''}>${c===SEM_CLIENTE?'(Vendas sem cliente)':esc(c)}</option>`).join('');
+  atualizarSelectVendaDevolucao();
+}
+
+function atualizarSelectVendaDevolucao() {
+  const cli = document.getElementById('dev-cliente').value;
+  const selVenda = document.getElementById('dev-venda');
+  const prev = selVenda.value;
+  if (!cli) {
+    selVenda.innerHTML = '<option value="">Selecione o cliente primeiro</option>';
+    selVenda.disabled = true;
+    mostrarResumoDevolucao();
+    return;
+  }
+  const vendas = saidas.map((s,i)=>({s,i}))
+    .filter(({s}) => !s.devolucao && clienteDaVenda(s) === cli)
+    .sort((a,b) => b.s.data.localeCompare(a.s.data));
+  selVenda.disabled = false;
+  selVenda.innerHTML = '<option value="">Selecione a venda</option>' + vendas.map(({s,i}) =>
+    `<option value="${i}"${String(i)===prev?' selected':''}>${fmtData(s.data)} · ${esc(s.modelo)} · ${esc(s.cor)} · ${esc(s.tamanho)} · ${s.qtd} pç · ${fmt(valorVenda(s))}${s.canal?' · '+esc(s.canal):''}</option>`).join('');
+  // um cliente com uma venda só já vem com ela escolhida
+  if (vendas.length === 1 && !selVenda.value) selVenda.value = String(vendas[0].i);
+  // só preenche o canal quando a venda escolhida mudou (não apaga o que a pessoa mudou à mão)
+  mostrarResumoDevolucao(selVenda.value !== prev);
+}
+
+// mostra os dados da venda escolhida e preenche o canal com o canal da venda
+function mostrarResumoDevolucao(preencherCanal) {
+  const el = document.getElementById('dev-resumo');
+  const idx = document.getElementById('dev-venda').value;
+  const s = idx === '' ? null : saidas[idx];
+  if (!s) { el.style.display = 'none'; return; }
+  if (preencherCanal) document.getElementById('dev-canal').value = s.canal || '';
+  el.style.display = '';
+  el.innerHTML = `Venda de <strong style="color:var(--text)">${fmtData(s.data)}</strong>: ${s.qtd}× ${esc(s.modelo)} · ${esc(s.cor)} · ${esc(s.tamanho)}${s.estampa?' · '+esc(s.estampa):''} — <strong style="color:var(--text)">${fmt(valorVenda(s))}</strong>${s.estado?' · '+esc(s.estado):''}. Ao concluir, esse valor deixa de contar na Carteira e no Saldo em Caixa.`;
+}
+
+function renderDevolucoes() {
+  atualizarSelectDevolucao();
+  const tb = document.getElementById('tbody-devolucoes');
+  const devs = saidas.map((s,i)=>({s,i})).filter(({s}) => s.devolucao)
+    .sort((a,b) => (b.s.devolucao.data||'').localeCompare(a.s.devolucao.data||''));
+  if (!devs.length) { tb.innerHTML = '<tr><td colspan="10" class="empty">Nenhuma devolução registrada.</td></tr>'; return; }
+  tb.innerHTML = devs.map(({s,i}) => {
+    const d = s.devolucao;
+    return `<tr>
+      <td>${fmtData(d.data)}</td>
+      <td>${esc(s.cliente)||'—'}</td>
+      <td>${fmtData(s.data)}</td>
+      <td style="font-size:12px">${esc(s.modelo)} · ${esc(s.cor)} · ${esc(s.tamanho)}</td>
+      <td>${esc(d.canal||s.canal)||'—'}</td>
+      <td><strong>${s.qtd}</strong></td>
+      <td style="color:var(--danger);font-weight:600">${fmt(valorVenda(s))}</td>
+      <td style="font-size:12px">${esc(d.motivo)||'—'}</td>
+      <td style="font-size:12px">${d.voltaEstoque?'✅ Voltou':'— Não voltou'}</td>
+      <td><button class="btn btn-danger btn-sm" title="Desfazer devolução" onclick="delDevolucao(${i})">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+document.getElementById('dev-cliente').addEventListener('change', () => {
+  document.getElementById('dev-venda').value = '';
+  atualizarSelectVendaDevolucao();
+});
+document.getElementById('dev-venda').addEventListener('change', () => mostrarResumoDevolucao(true));
+
+document.getElementById('btn-add-devolucao').addEventListener('click', () => {
+  const idx    = document.getElementById('dev-venda').value;
+  const canal  = document.getElementById('dev-canal').value;
+  const data   = document.getElementById('dev-data').value;
+  const motivo = document.getElementById('dev-motivo').value.trim();
+  const voltaEstoque = document.getElementById('dev-volta-estoque').checked;
+  const s = idx === '' ? null : saidas[idx];
+  if (!s || !data || !motivo) {
+    alert('Preencha: Cliente, Venda, Data e Motivo da devolução.');
+    return;
+  }
+  if (s.devolucao) { alert('Essa venda já foi devolvida.'); return; }
+  s.devolucao = { data, motivo, canal, voltaEstoque, criadoEm: new Date().toISOString() };
+  salvar();
+  document.getElementById('dev-cliente').value = '';
+  document.getElementById('dev-venda').value = '';
+  document.getElementById('dev-canal').value = '';
+  document.getElementById('dev-motivo').value = '';
+  document.getElementById('dev-volta-estoque').checked = true;
+  document.getElementById('dev-data').value = hoje();
+  renderAll();
+  showToast('↩️ Devolução registrada!');
+});
+
+window.delDevolucao = function(i) {
+  if (!saidas[i] || !saidas[i].devolucao) return;
+  if (!confirm('Desfazer esta devolução? A venda volta a contar na Carteira e no Saldo em Caixa.')) return;
+  delete saidas[i].devolucao;
+  salvar(); renderAll();
+};
 
 // ── RENDER RELATÓRIO ─────────────────────────────────────
 function renderRelatorio() {
@@ -3292,7 +3468,8 @@ document.getElementById('btn-salvar-edit').addEventListener('click', ()=>{
   if(canal==='Shopee'){ taxa=receitaLiq*0.20; taxaFixa=4.5; }
   const lucroLiq = receitaLiq - custoCamisa - custosExtras - taxa - taxaFixa;
 
-  saidas[idx] = {modelo,cor,tamanho,estampa,canal,qtd,preco,desconto,cliente,estado,lucroLiq,data,obs};
+  // mantém campos que o formulário não edita (criadoEm, devolucao)
+  saidas[idx] = {...saidas[idx], modelo,cor,tamanho,estampa,canal,qtd,preco,desconto,cliente,estado,lucroLiq,data,obs};
   salvar();
   renderAll();
   fecharModal();
@@ -3414,6 +3591,7 @@ function renderAll() {
   renderEntradas();
   renderCarteira();
   renderSaidas();
+  renderDevolucoes();
   renderInvestimentos();
   renderAjustes();
   renderSummary();

@@ -1783,11 +1783,31 @@ document.getElementById('inv-data').value = hoje();
 document.getElementById('desp-data').value = hoje();
 
 // ── ESTOQUE CALC ─────────────────────────────────────────
+// próximo número de sequência: usado pra saber com certeza a ordem em que entradas, vendas,
+// ajustes e devoluções foram lançados, sem depender do relógio do celular/computador de quem
+// está usando (dois aparelhos com hora errada ou fora de sincronia podiam embaralhar a ordem
+// e fazer uma venda não descontar do estoque certo). Cresce sempre, nunca empata.
+function proximoSeq() {
+  let max = 0;
+  const checa = x => { if (Number.isFinite(x.seq) && x.seq > max) max = x.seq; };
+  entradas.forEach(checa);
+  saidas.forEach(s => { checa(s); if (s.devolucao) checa(s.devolucao); });
+  ajustes.forEach(checa);
+  return max + 1;
+}
+
 // o ajuste de estoque é uma contagem real: a partir dele o estoque daquela peça passa a ser
 // exatamente qtdDepois, e tudo que foi lançado antes (entradas, vendas, ajustes antigos) é
-// esquecido. Só contam as entradas/vendas lançadas depois do último ajuste (pelo criadoEm).
-// Ajustes antigos (sem criadoEm, de antes dessa regra) continuam somando a diferença (delta),
-// porque nos registros antigos não dá pra saber a ordem em que as coisas foram lançadas.
+// esquecido. Só contam as entradas/vendas lançadas depois do último ajuste — a ordem é decidida
+// pelo "seq" (sequência interna, à prova de relógio desacertado); registros de antes dessa
+// reforço só têm "criadoEm" (data/hora do aparelho), usado como alternativa só entre eles.
+// Ajustes antigos (sem seq nem criadoEm) continuam somando a diferença (delta), porque nesses
+// registros não dá pra saber a ordem em que as coisas foram lançadas.
+function depoisDoAjuste(x, a) {
+  if (!a) return true;
+  if (Number.isFinite(x.seq) && Number.isFinite(a.seq)) return x.seq > a.seq;
+  return !!(x.criadoEm && a.criadoEm && x.criadoEm > a.criadoEm);
+}
 function calcEstoque() {
   const chave = x => `${x.modelo}||${x.cor}||${x.tamanho}`;
   // ajustes são sempre adicionados no fim da lista, então o último da peça é o mais recente
@@ -1799,8 +1819,7 @@ function calcEstoque() {
   const soma = (x, valor) => {
     const k = chave(x);
     const a = ultimoAjuste[k];
-    // registro sem criadoEm é antigo, então sempre é anterior a um ajuste novo
-    if (a && !(x.criadoEm && x.criadoEm > a.criadoEm)) return;
+    if (a && !depoisDoAjuste(x, a)) return;
     est[k] = (est[k]||0) + valor;
   };
   entradas.forEach(e => soma(e, Number(e.qtd)));
@@ -1808,7 +1827,7 @@ function calcEstoque() {
   // devolução com "peça volta para o estoque": devolve a peça, contando a partir do momento da devolução
   saidas.forEach(s => {
     const d = s.devolucao;
-    if (d && d.voltaEstoque) soma({modelo:s.modelo, cor:s.cor, tamanho:s.tamanho, criadoEm:d.criadoEm}, Number(s.qtd));
+    if (d && d.voltaEstoque) soma({modelo:s.modelo, cor:s.cor, tamanho:s.tamanho, criadoEm:d.criadoEm, seq:d.seq}, Number(s.qtd));
   });
   ajustes.forEach(a => { if (!a.criadoEm) soma(a, Number(a.delta)); });
   return est;
@@ -2420,7 +2439,7 @@ document.getElementById('btn-add-devolucao').addEventListener('click', () => {
     return;
   }
   if (s.devolucao) { alert('Essa venda já foi devolvida.'); return; }
-  s.devolucao = { data, motivo, canal, voltaEstoque, criadoEm: new Date().toISOString() };
+  s.devolucao = { data, motivo, canal, voltaEstoque, criadoEm: new Date().toISOString(), seq: proximoSeq() };
   salvar();
   document.getElementById('dev-cliente').value = '';
   document.getElementById('dev-venda').value = '';
@@ -3142,7 +3161,7 @@ document.getElementById('btn-add-entrada').addEventListener('click',()=>{
     alert('Preencha todos os campos obrigatórios (Modelo, Cor, Tamanho, Quantidade e Data).');
     return;
   }
-  entradas.push({modelo,cor,tamanho,fornecedor,qtd,custo,frete,carteira,data,obs,criadoEm:new Date().toISOString()});
+  entradas.push({modelo,cor,tamanho,fornecedor,qtd,custo,frete,carteira,data,obs,criadoEm:new Date().toISOString(),seq:proximoSeq()});
   salvar();
   renderAll();
   document.getElementById('ent-modelo').value='';
@@ -3259,7 +3278,7 @@ document.getElementById('btn-salvar-ajuste').addEventListener('click', () => {
   const qtdAntes = calcEstoque()[key] || 0;
   const delta = qtdReal - qtdAntes;
   // salva mesmo com delta 0: o ajuste marca a contagem real e "zera" o histórico anterior da peça
-  ajustes.push({modelo, cor, tamanho, qtdAntes, qtdDepois: qtdReal, delta, data, obs, criadoEm: new Date().toISOString()});
+  ajustes.push({modelo, cor, tamanho, qtdAntes, qtdDepois: qtdReal, delta, data, obs, criadoEm: new Date().toISOString(), seq: proximoSeq()});
   salvar();
   renderAll();
   fecharModalAjuste();
@@ -3359,7 +3378,7 @@ document.getElementById('btn-add-saida').addEventListener('click',()=>{
   const calc = calcularLucroLiq();
   const lucroLiq = calc ? calc.lucro : 0;
 
-  saidas.push({modelo,cor,tamanho,estampa,canal,qtd,preco,desconto,cliente,estado,lucroLiq,data,obs,criadoEm:new Date().toISOString()});
+  saidas.push({modelo,cor,tamanho,estampa,canal,qtd,preco,desconto,cliente,estado,lucroLiq,data,obs,criadoEm:new Date().toISOString(),seq:proximoSeq()});
   salvar();
   renderAll();
 
@@ -3469,7 +3488,7 @@ document.getElementById('btn-salvar-edit').addEventListener('click', ()=>{
   if(canal==='Shopee'){ taxa=receitaLiq*0.20; taxaFixa=4.5; }
   const lucroLiq = receitaLiq - custoCamisa - custosExtras - taxa - taxaFixa;
 
-  // mantém campos que o formulário não edita (criadoEm, devolucao)
+  // mantém campos que o formulário não edita (criadoEm, seq, devolucao)
   saidas[idx] = {...saidas[idx], modelo,cor,tamanho,estampa,canal,qtd,preco,desconto,cliente,estado,lucroLiq,data,obs};
   salvar();
   renderAll();
